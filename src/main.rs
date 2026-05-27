@@ -106,6 +106,7 @@ async fn main() -> anyhow::Result<()> {
             url,
             args.webhook_template,
             args.webhook_retries,
+            std::time::Duration::from_secs(10),
             tracker.clone(),
         )
     });

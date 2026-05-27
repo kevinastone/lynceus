@@ -17,9 +17,12 @@ impl WebhookClient {
         url: String,
         template: serde_json::Value,
         retries: usize,
+        min_backoff: std::time::Duration,
         tracker: TaskTracker,
     ) -> Self {
-        let retry_policy = ExponentialBackoff::builder().build_with_max_retries(retries as u32);
+        let retry_policy = ExponentialBackoff::builder()
+            .retry_bounds(min_backoff, std::time::Duration::from_secs(300))
+            .build_with_max_retries(retries as u32);
         let client = ClientBuilder::new(reqwest::Client::new())
             .with(reqwest_tracing::TracingMiddleware::default())
             .with(RetryTransientMiddleware::new_with_policy(retry_policy))
@@ -154,6 +157,7 @@ mod tests {
             server.url(),
             json!({"path": "{{path}}"}),
             2, // 2 retries (up to 3 attempts)
+            std::time::Duration::from_millis(1),
             tracker.clone(),
         );
 
@@ -199,6 +203,7 @@ mod tests {
             server.url(),
             json!({"path": "{{path}}"}),
             1, // 1 retry (up to 2 attempts)
+            std::time::Duration::from_millis(1),
             tracker.clone(),
         );
 
@@ -232,6 +237,7 @@ mod tests {
             server.url(),
             json!({"path": "{{path}}"}),
             0, // 0 retries (exactly 1 attempt)
+            std::time::Duration::from_millis(1),
             tracker.clone(),
         );
 
