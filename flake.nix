@@ -35,9 +35,19 @@
           stable.rustfmt
           stable.clippy
         ];
+        customFetchurl =
+          args:
+          pkgs.fetchurl (
+            args
+            // {
+              curlOpts =
+                (args.curlOpts or "") + " --user-agent \"kstone-argus (https://github.com/kstone/argus)\"";
+            }
+          );
         lib = pkgs.callPackage naersk {
           cargo = toolchain;
           rustc = toolchain;
+          fetchurl = customFetchurl;
         };
         treefmtStack = treefmt-nix.lib.evalModule pkgs {
           projectRootFile = "flake.nix";
