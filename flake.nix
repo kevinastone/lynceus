@@ -42,8 +42,7 @@
           pkgs.fetchurl (
             args
             // {
-              curlOpts =
-                (args.curlOpts or "") + " --user-agent \"kstone-argus (https://github.com/kstone/argus)\"";
+              curlOpts = (args.curlOpts or "") + " --user-agent kstone-argus-downloader/1.0";
             }
           );
         lib = pkgs.callPackage naersk {
