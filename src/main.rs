@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 mod stability;
-use stability::{StabilityConfig, FileStabilizer};
+use stability::{FileStabilizer, StabilityConfig};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -79,9 +79,7 @@ async fn main() -> anyhow::Result<()> {
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
     // 1. Set up the polling configuration
-    let poll_config = Config::default()
-        .with_poll_interval(*args.poll)
-        .with_compare_contents(true);
+    let poll_config = Config::default().with_poll_interval(*args.poll);
 
     // 2. Initialize the full debouncer
     // We explicitly type it to use PollWatcher and the standard FileIdMap cache
