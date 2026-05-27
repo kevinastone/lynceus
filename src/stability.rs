@@ -73,7 +73,6 @@ impl FileStabilizer {
         let mut error_count = 0;
 
         loop {
-            tokio::time::sleep(self.config.cooldown).await;
             match tokio::fs::metadata(&full_path).await {
                 Ok(metadata) => {
                     error_count = 0;
@@ -120,6 +119,8 @@ impl FileStabilizer {
                     }
                 }
             }
+
+            tokio::time::sleep(self.config.cooldown).await;
         }
     }
 }
