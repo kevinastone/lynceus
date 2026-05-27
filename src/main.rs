@@ -118,7 +118,7 @@ async fn main() -> anyhow::Result<()> {
 
     tokio::select! {
         _ = stream_future => {
-            tracing::info!("Event stream finished");
+            tracing::error!("Event stream terminated unexpectedly");
         }
         _ = tokio::signal::ctrl_c() => {
             tracing::info!("Shutdown signal received. Initiating graceful shutdown...");
@@ -129,7 +129,7 @@ async fn main() -> anyhow::Result<()> {
 
     tokio::select! {
         _ = tracker.wait() => {
-            tracing::info!("All pending webhook notifications sent successfully. Shutdown complete.");
+            tracing::debug!("All pending webhook notifications sent successfully. Shutdown complete.");
         }
         _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => {
             tracing::warn!("Graceful shutdown timed out (some webhooks did not complete). Exiting.");
