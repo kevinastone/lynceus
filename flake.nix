@@ -71,7 +71,6 @@
           src = ./.;
           buildInputs = with pkgs; [ openssl ];
           nativeBuildInputs = with pkgs; [ pkg-config ];
-          CARGO_HTTP_USER_AGENT = "kstone/argus (://github.com/kstone/argus)";
         };
       in
       {
@@ -111,7 +110,7 @@
                 paths = [
                   cacert
                   argus
-                  openssl
+                  openssl.out
                   bashInteractive
                   coreutils
                 ];
@@ -121,7 +120,7 @@
                 ];
               };
               config.Env = [
-                "LD_LIBRARY_PATH=${openssl}/lib"
+                "LD_LIBRARY_PATH=${openssl.out}/lib"
               ];
               config.Entrypoint = [ "/bin/argus" ];
               config.Labels = {
@@ -141,7 +140,7 @@
           with pkgs;
           mkShell {
             nativeBuildInputs = [ toolchain ] ++ commonArgs.nativeBuildInputs;
-            inherit (commonArgs) buildInputs CARGO_HTTP_USER_AGENT;
+            inherit (commonArgs) buildInputs;
             packages = [
               skopeo
               cargo-outdated
