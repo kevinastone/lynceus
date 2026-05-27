@@ -214,4 +214,36 @@ mod tests {
         mock_fail1.assert_async().await;
         mock_fail2.assert_async().await;
     }
+
+    #[tokio::test]
+    async fn test_webhook_no_retries() {
+        let mut server = mockito::Server::new_async().await;
+
+        let mock_fail = server
+            .mock("POST", "/")
+            .with_status(500)
+            .expect(1)
+            .create_async()
+            .await;
+
+        let tracker = TaskTracker::new();
+        let client = WebhookClient::new(
+            server.url(),
+            json!({"path": "{{path}}"}),
+            0, // 0 retries (exactly 1 attempt)
+            tracker.clone(),
+        );
+
+        client.send_notification(Path::new("test.txt"));
+
+        tracker.close();
+        let finished = tokio::select! {
+            _ = tracker.wait() => true,
+            _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => false,
+        };
+
+        assert!(finished, "Webhook notification took too long to fail");
+
+        mock_fail.assert_async().await;
+    }
 }
