@@ -59,7 +59,11 @@
       in
       {
         packages = rec {
-          argus = lib.buildPackage ./.;
+          argus = lib.buildPackage {
+            src = ./.;
+            buildInputs = with pkgs; [ openssl ];
+            nativeBuildInputs = with pkgs; [ pkg-config ];
+          };
           bin = argus;
           default = argus;
 
@@ -67,22 +71,29 @@
             src = ./.;
             mode = "check";
             release = false;
+            buildInputs = with pkgs; [ openssl ];
+            nativeBuildInputs = with pkgs; [ pkg-config ];
           };
           clippy = lib.buildPackage {
             src = ./.;
             mode = "clippy";
             release = false;
+            buildInputs = with pkgs; [ openssl ];
+            nativeBuildInputs = with pkgs; [ pkg-config ];
           };
           test = lib.buildPackage {
             src = ./.;
             mode = "test";
             release = false;
+            buildInputs = with pkgs; [ openssl ];
+            nativeBuildInputs = with pkgs; [ pkg-config ];
           };
 
           image =
             with pkgs;
             dockerTools.buildImage {
               name = "argus";
+              contents = [ cacert ];
               config.Entrypoint = [ "${argus}/bin/argus" ];
               config.Labels = {
                 "org.opencontainers.image.title" = "argus";
