@@ -21,6 +21,7 @@ impl WebhookClient {
     ) -> Self {
         let retry_policy = ExponentialBackoff::builder().build_with_max_retries(retries as u32);
         let client = ClientBuilder::new(reqwest::Client::new())
+            .with(reqwest_tracing::TracingMiddleware::default())
             .with(RetryTransientMiddleware::new_with_policy(retry_policy))
             .build();
 
