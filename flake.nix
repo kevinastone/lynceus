@@ -4,6 +4,7 @@
     utils.url = "github:numtide/flake-utils";
     treefmt-nix.url = "github:numtide/treefmt-nix";
     treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
+    crane.url = "github:ipetkov/crane";
   };
 
   outputs =
@@ -11,12 +12,14 @@
       nixpkgs,
       utils,
       treefmt-nix,
+      crane,
       ...
     }:
     utils.lib.eachDefaultSystem (
       system:
       let
         pkgs = import nixpkgs { inherit system; };
+        craneLib = crane.mkLib pkgs;
         treefmtStack = treefmt-nix.lib.evalModule pkgs {
           projectRootFile = "flake.nix";
           programs.rustfmt = {
@@ -34,21 +37,25 @@
           };
         };
 
-        cargoToml = fromTOML (builtins.readFile ./Cargo.toml);
+        src = craneLib.cleanCargoSource (craneLib.path ./.);
 
         commonArgs = {
-          pname = cargoToml.package.name;
-          version = cargoToml.package.version;
-          src = ./.;
-          ## TODO: cargoLock fetching is broken
-          ## https://github.com/NixOS/nixpkgs/pull/512735
-          # cargoLock.lockFile = ./Cargo.lock;
-          cargoHash = "sha256-7Ergx/Wh6cd1qizVmugu0TmXuSai0bYM4x5tTxt3W8U=";
+          inherit src;
+          strictDeps = true;
           buildInputs = with pkgs; [ openssl ];
           nativeBuildInputs = with pkgs; [ pkg-config ];
         };
 
-        argus = pkgs.rustPlatform.buildRustPackage commonArgs;
+        # Build only dependencies to cache them
+        cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+
+        # Build the final binary using cached dependency artifacts
+        argus = craneLib.buildPackage (
+          commonArgs
+          // {
+            inherit cargoArtifacts;
+          }
+        );
       in
       {
         packages = rec {
@@ -56,31 +63,27 @@
           bin = argus;
           default = argus;
 
-          check = pkgs.rustPlatform.buildRustPackage (
+          check = craneLib.buildPackage (
             commonArgs
             // {
+              inherit cargoArtifacts;
               pname = "argus-check";
-              buildPhase = "cargo check";
-              installPhase = "touch $out";
+              cargoBuildCommand = "cargo check";
             }
           );
 
-          clippy = pkgs.rustPlatform.buildRustPackage (
+          clippy = craneLib.cargoClippy (
             commonArgs
             // {
-              pname = "argus-clippy";
-              nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ pkgs.clippy ];
-              buildPhase = "cargo clippy -- -D warnings";
-              installPhase = "touch $out";
+              inherit cargoArtifacts;
+              cargoClippyExtraArgs = "--all-targets -- --deny warnings";
             }
           );
 
-          test = pkgs.rustPlatform.buildRustPackage (
+          test = craneLib.cargoTest (
             commonArgs
             // {
-              pname = "argus-test";
-              buildPhase = "cargo test";
-              installPhase = "touch $out";
+              inherit cargoArtifacts;
             }
           );
 
