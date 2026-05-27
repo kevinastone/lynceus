@@ -83,7 +83,7 @@ async fn main() -> anyhow::Result<()> {
 
     // 2. Initialize the full debouncer
     // We explicitly type it to use PollWatcher and the standard FileIdMap cache
-    let mut _debouncer = new_debouncer_opt::<_, PollWatcher, FileIdMap>(
+    let mut debouncer = new_debouncer_opt::<_, PollWatcher, FileIdMap>(
         *args.debounce, // Debounce timeout
         None,           // Tick rate (None = auto-calculated)
         move |res| {
@@ -95,7 +95,7 @@ async fn main() -> anyhow::Result<()> {
     .context("Failed to create polling debouncer")?;
 
     // 3. Add the path to the debouncer
-    _debouncer
+    debouncer
         .watch(&target_path, RecursiveMode::Recursive)
         .with_context(|| format!("Failed to start watching path: {:?}", target_path))?;
 
