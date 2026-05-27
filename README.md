@@ -34,10 +34,11 @@ Run the compiled binary by passing the target directory path as a positional arg
 ### Configuration Options
 
 ```text
-Usage: argus [OPTIONS] <PATH>
+Usage: argus [OPTIONS] <PATH> [WEBHOOK_URL]
 
 Arguments:
-  <PATH>  Path to watch for changes [env: ARGUS_PATH=]
+  <PATH>         Path to watch for changes [env: ARGUS_PATH=]
+  [WEBHOOK_URL]  Optional webhook URL to post a message to when a file is created [env: ARGUS_WEBHOOK_URL=]
 
 Options:
   -p, --poll <POLL>                  Polling interval (e.g. 2s, 500ms) [env: ARGUS_POLL=] [default: 2s]
@@ -55,6 +56,21 @@ For network copies (e.g. copying huge media files over an SMB share), we want a 
 
 ```bash
 cargo run --release -- /path/to/watch --poll 5s --debounce 15s --cooldown 10s
+```
+
+### Webhook Notifications (Optional)
+
+You can specify an optional Discord/Slack or generic HTTP endpoint webhook URL. When a file is fully created and stable, Argus posts a non-blocking JSON payload containing:
+```json
+{
+  "event": "file_created",
+  "path": "video.mp4"
+}
+```
+
+Example:
+```bash
+cargo run --release -- /path/to/watch https://example.com/webhook
 ```
 
 ---
