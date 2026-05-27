@@ -35,6 +35,8 @@
           stable.rustfmt
           stable.clippy
         ];
+        # A custom fetchurl that injects a User-Agent header, which is
+        # required to avoid 403 Forbidden errors when downloading crates from crates.io.
         customFetchurl =
           args:
           pkgs.fetchurl (
