@@ -26,7 +26,51 @@ async fn main() -> anyhow::Result<()> {
 
     let args = Args::parse();
     tracing::info!(?args, "Starting Argus");
-    let target_path = args.path.clone();
+    let absolute_path = if args.path.is_absolute() {
+        args.path.clone()
+    } else {
+        std::env::current_dir()
+            .map(|cwd| cwd.join(&args.path))
+            .unwrap_or_else(|_| args.path.clone())
+    };
+
+    let path_str = absolute_path.to_string_lossy();
+    let has_glob = path_str.contains('*')
+        || path_str.contains('?')
+        || path_str.contains('[')
+        || path_str.contains(']');
+
+    let (watch_path, glob_pattern) = if has_glob {
+        let mut base_path = PathBuf::new();
+        let mut components = absolute_path.components().peekable();
+
+        while let Some(component) = components.peek() {
+            let comp_str = component.as_os_str().to_string_lossy();
+            if comp_str.contains('*')
+                || comp_str.contains('?')
+                || comp_str.contains('[')
+                || comp_str.contains(']')
+            {
+                break;
+            }
+            base_path.push(component);
+            components.next();
+        }
+
+        let final_base = if base_path.as_os_str().is_empty() {
+            PathBuf::from(".")
+        } else {
+            base_path
+        };
+
+        let watch_path = std::fs::canonicalize(&final_base).unwrap_or(final_base);
+        let pattern = glob::Pattern::new(&path_str).context("Failed to parse glob pattern")?;
+
+        (watch_path, Some(pattern))
+    } else {
+        let watch_path = std::fs::canonicalize(&args.path).unwrap_or_else(|_| args.path.clone());
+        (watch_path, None)
+    };
 
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
@@ -48,10 +92,14 @@ async fn main() -> anyhow::Result<()> {
 
     // 3. Add the path to the debouncer
     debouncer
-        .watch(&target_path, RecursiveMode::Recursive)
-        .with_context(|| format!("Failed to start watching path: {:?}", target_path))?;
+        .watch(&watch_path, RecursiveMode::Recursive)
+        .with_context(|| format!("Failed to start watching path: {:?}", watch_path))?;
 
-    tracing::info!(?target_path, "Watching for new files");
+    if let Some(ref pattern) = glob_pattern {
+        tracing::info!(?watch_path, glob = %pattern, "Watching for new files matching glob");
+    } else {
+        tracing::info!(?watch_path, "Watching for new files");
+    }
 
     // Turn mpsc receiver into an async stream
     let event_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(rx);
@@ -59,22 +107,31 @@ async fn main() -> anyhow::Result<()> {
     let created_files_stream = event_stream
         .filter_map(|res| async move { res.ok() })
         .flat_map({
-            let target_path = target_path.clone();
+            let watch_path = watch_path.clone();
+            let glob_pattern = glob_pattern.clone();
             move |events| {
-                let target_path = target_path.clone();
+                let watch_path = watch_path.clone();
+                let glob_pattern = glob_pattern.clone();
                 let paths: Vec<PathBuf> = events
                     .into_iter()
                     .filter(|e| matches!(e.event.kind, notify::EventKind::Create(_)))
                     .flat_map(|e| e.event.paths)
                     .filter(|p| p.is_file())
-                    .filter_map(|p| p.strip_prefix(&target_path).ok().map(|r| r.to_path_buf()))
+                    .filter(move |p| {
+                        if let Some(ref pattern) = glob_pattern {
+                            pattern.matches_path(p)
+                        } else {
+                            true
+                        }
+                    })
+                    .filter_map(|p| p.strip_prefix(&watch_path).ok().map(|r| r.to_path_buf()))
                     .collect();
                 futures::stream::iter(paths)
             }
         });
 
     let stability_config = StabilityConfig::from(&args);
-    let stabilizer = std::sync::Arc::new(FileStabilizer::new(target_path, stability_config));
+    let stabilizer = std::sync::Arc::new(FileStabilizer::new(watch_path, stability_config));
 
     let tracker = tokio_util::task::TaskTracker::new();
     let webhook_client = args

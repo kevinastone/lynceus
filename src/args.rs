@@ -5,7 +5,7 @@ use std::time::Duration;
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct Args {
-    /// Path to watch for changes
+    /// Path or glob pattern to watch for changes (e.g. /path/to/watch/**/*.txt)
     #[arg(env = "ARGUS_PATH")]
     pub path: std::path::PathBuf,
 
