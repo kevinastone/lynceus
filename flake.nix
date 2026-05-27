@@ -93,7 +93,10 @@
             with pkgs;
             dockerTools.buildImage {
               name = "argus";
-              contents = [ cacert ];
+              copyToRoot = buildEnv {
+                name = "image-root";
+                paths = [ cacert ];
+              };
               config.Entrypoint = [ "${argus}/bin/argus" ];
               config.Labels = {
                 "org.opencontainers.image.title" = "argus";
