@@ -70,7 +70,14 @@
         commonArgs = {
           src = ./.;
           buildInputs = with pkgs; [ openssl ];
-          nativeBuildInputs = with pkgs; [ pkg-config ];
+          nativeBuildInputs = [
+            pkgs.pkg-config
+            # Force the use of nixpkgs bintools for linking
+            pkgs.llvmPackages.bintools
+          ];
+          # Tell fenix's rustc not to use its bundled lld,
+          # preserving Nix's dynamic RPATH patching.
+          CARGO_BUILD_RUSTFLAGS = "-Clink-self-contained=-linker";
         };
       in
       {
@@ -110,7 +117,7 @@
                 paths = [
                   cacert
                   argus
-                  openssl.out
+                  # openssl.out
                   bashInteractive
                   coreutils
                 ];
@@ -120,7 +127,8 @@
                 ];
               };
               config.Env = [
-                "LD_LIBRARY_PATH=${openssl.out}/lib"
+                # "LD_LIBRARY_PATH=${openssl.out}/lib"
+                "SSL_CERT_FILE=${cacert}/etc/ssl/certs/ca-bundle.crt"
               ];
               config.Entrypoint = [ "/bin/argus" ];
               config.Labels = {
