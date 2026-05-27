@@ -20,7 +20,7 @@ jobs:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Magic Nix Cache (Faster Builds)
-        uses: DeterminateSystems/magic-nix-cache-action@v13
+        uses: DeterminateSystems/magic-nix-cache-action@908b263ff629f4cc17666315b7fd3ec127c6244d
 
       - name: Run Nix checks
         run: nix flake check -L
