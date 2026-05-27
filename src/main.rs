@@ -147,7 +147,10 @@ async fn main() -> anyhow::Result<()> {
         })
         .buffer_unordered(100);
 
-    let webhook_client = args.webhook_url.as_ref().map(|url| WebhookClient::new(url.clone()));
+    let webhook_client = args
+        .webhook_url
+        .as_ref()
+        .map(|url| WebhookClient::new(url.clone()));
     tokio::pin!(stability_stream);
 
     while let Some(result) = stability_stream.next().await {

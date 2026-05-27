@@ -1,6 +1,6 @@
+use crate::Args;
 use std::path::PathBuf;
 use std::time::Duration;
-use crate::Args;
 
 #[derive(Clone, Copy, Debug)]
 pub struct StabilityConfig {
