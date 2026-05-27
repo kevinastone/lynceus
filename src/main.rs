@@ -4,6 +4,7 @@ use futures::{StreamExt, TryStreamExt};
 use notify::{Config, PollWatcher, RecursiveMode};
 use notify_debouncer_full::{FileIdMap, new_debouncer_opt};
 use std::path::PathBuf;
+use wax::{Glob, Program};
 
 mod args;
 pub use args::Args;
@@ -35,24 +36,10 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let path_str = absolute_path.to_string_lossy();
-    let mut watch_path = PathBuf::new();
-    let mut glob_pattern = None;
+    let glob = Glob::new(&path_str).context("Failed to parse glob pattern")?;
+    let (prefix, glob_pattern) = glob.partition();
 
-    for component in absolute_path.components() {
-        let comp_str = component.as_os_str().to_string_lossy();
-        if comp_str.contains(['*', '?', '[', ']', '{', '}']) {
-            let pattern = glob::Pattern::new(&path_str).context("Failed to parse glob pattern")?;
-            glob_pattern = Some(pattern);
-            break;
-        }
-        watch_path.push(component);
-    }
-
-    if watch_path.as_os_str().is_empty() {
-        watch_path = PathBuf::from(".");
-    }
-
-    let watch_path = std::fs::canonicalize(&watch_path).unwrap_or(watch_path);
+    let watch_path = std::fs::canonicalize(&prefix).unwrap_or(prefix);
 
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
@@ -99,14 +86,17 @@ async fn main() -> anyhow::Result<()> {
                     .filter(|e| matches!(e.event.kind, notify::EventKind::Create(_)))
                     .flat_map(|e| e.event.paths)
                     .filter(|p| p.is_file())
-                    .filter(move |p| {
+                    .filter_map({
+                        let watch_path = watch_path.clone();
+                        move |p| p.strip_prefix(&watch_path).ok().map(|r| r.to_path_buf())
+                    })
+                    .filter(move |relative_path| {
                         if let Some(ref pattern) = glob_pattern {
-                            pattern.matches_path(p)
+                            pattern.is_match(relative_path.as_path())
                         } else {
                             true
                         }
                     })
-                    .filter_map(|p| p.strip_prefix(&watch_path).ok().map(|r| r.to_path_buf()))
                     .collect();
                 futures::stream::iter(paths)
             }
