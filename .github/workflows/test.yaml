@@ -3,25 +3,24 @@ name: Test
 
 on: [push, pull_request]
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        rust:
-          - stable
-          - beta
-      fail-fast: false
 
     steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@master
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
         with:
-          toolchain: ${{ matrix.rust }}
-          components: clippy
-      - name: Build
-        run: cargo build --verbose
-      - name: Check with clippy
-        run: cargo clippy --verbose --all-targets --all-features -- -D warnings
-      - name: Run tests
-        run: cargo test --verbose
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Magic Nix Cache (Faster Builds)
+        uses: DeterminateSystems/magic-nix-cache-action@v13
+
+      - name: Run Nix checks
+        run: nix flake check -L
