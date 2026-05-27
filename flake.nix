@@ -111,8 +111,13 @@
                 paths = [
                   cacert
                   argus
+                  openssl
+                  bashInteractive
                 ];
               };
+              config.Env = [
+                "LD_LIBRARY_PATH=${openssl}/lib"
+              ];
               config.Entrypoint = [ "/bin/argus" ];
               config.Labels = {
                 "org.opencontainers.image.title" = "argus";
