@@ -125,45 +125,36 @@ mod tests {
 
     #[tokio::test]
     async fn test_webhook_retry_success() {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
-        use tokio::net::TcpListener;
+        let mut server = mockito::Server::new_async().await;
 
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let port = listener.local_addr().unwrap().port();
-        let url = format!("http://127.0.0.1:{}", port);
+        let mock_fail1 = server
+            .mock("POST", "/")
+            .with_status(500)
+            .expect(1)
+            .create_async()
+            .await;
+
+        let mock_fail2 = server
+            .mock("POST", "/")
+            .with_status(500)
+            .expect(1)
+            .create_async()
+            .await;
+
+        let mock_success = server
+            .mock("POST", "/")
+            .with_status(200)
+            .expect(1)
+            .create_async()
+            .await;
 
         let tracker = TaskTracker::new();
         let client = WebhookClient::new(
-            url,
+            server.url(),
             json!({"path": "{{path}}"}),
             2, // 2 retries (up to 3 attempts)
             tracker.clone(),
         );
-
-        // Spawn mock server
-        tokio::spawn(async move {
-            // Attempt 1: return 500
-            if let Ok((mut stream, _)) = listener.accept().await {
-                let mut buf = [0; 1024];
-                let _ = stream.read(&mut buf).await;
-                let response = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n";
-                let _ = stream.write_all(response.as_bytes()).await;
-            }
-            // Attempt 2: return 500
-            if let Ok((mut stream, _)) = listener.accept().await {
-                let mut buf = [0; 1024];
-                let _ = stream.read(&mut buf).await;
-                let response = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n";
-                let _ = stream.write_all(response.as_bytes()).await;
-            }
-            // Attempt 3: return 200
-            if let Ok((mut stream, _)) = listener.accept().await {
-                let mut buf = [0; 1024];
-                let _ = stream.read(&mut buf).await;
-                let response = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n";
-                let _ = stream.write_all(response.as_bytes()).await;
-            }
-        });
 
         client.send_notification(Path::new("test.txt"));
 
@@ -178,43 +169,37 @@ mod tests {
             finished,
             "Webhook notification took too long or failed to complete"
         );
+
+        mock_fail1.assert_async().await;
+        mock_fail2.assert_async().await;
+        mock_success.assert_async().await;
     }
 
     #[tokio::test]
     async fn test_webhook_retry_failure() {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
-        use tokio::net::TcpListener;
+        let mut server = mockito::Server::new_async().await;
 
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let port = listener.local_addr().unwrap().port();
-        let url = format!("http://127.0.0.1:{}", port);
+        let mock_fail1 = server
+            .mock("POST", "/")
+            .with_status(500)
+            .expect(1)
+            .create_async()
+            .await;
+
+        let mock_fail2 = server
+            .mock("POST", "/")
+            .with_status(500)
+            .expect(1)
+            .create_async()
+            .await;
 
         let tracker = TaskTracker::new();
         let client = WebhookClient::new(
-            url,
+            server.url(),
             json!({"path": "{{path}}"}),
             1, // 1 retry (up to 2 attempts)
             tracker.clone(),
         );
-
-        // Spawn mock server
-        tokio::spawn(async move {
-            // Attempt 1: return 500
-            if let Ok((mut stream, _)) = listener.accept().await {
-                let mut buf = [0; 1024];
-                let _ = stream.read(&mut buf).await;
-                let response = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n";
-                let _ = stream.write_all(response.as_bytes()).await;
-            }
-            // Attempt 2: return 500
-            if let Ok((mut stream, _)) = listener.accept().await {
-                let mut buf = [0; 1024];
-                let _ = stream.read(&mut buf).await;
-                let response = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n";
-                let _ = stream.write_all(response.as_bytes()).await;
-            }
-            // No more connections expected because it gives up after 2 attempts.
-        });
 
         client.send_notification(Path::new("test.txt"));
 
@@ -225,5 +210,8 @@ mod tests {
         };
 
         assert!(finished, "Webhook notification took too long to fail");
+
+        mock_fail1.assert_async().await;
+        mock_fail2.assert_async().await;
     }
 }
