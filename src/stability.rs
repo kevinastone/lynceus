@@ -4,7 +4,7 @@ use crate::Args;
 
 #[derive(Clone, Copy, Debug)]
 pub struct StabilityConfig {
-    pub cooldown_duration: Duration,
+    pub cooldown: Duration,
     pub stable_limit: usize,
     pub error_limit: usize,
 }
@@ -17,7 +17,7 @@ impl StabilityConfig {
 impl Default for StabilityConfig {
     fn default() -> Self {
         Self {
-            cooldown_duration: Duration::from_secs(10),
+            cooldown: Duration::from_secs(10),
             stable_limit: Self::DEFAULT_STABLE_LIMIT,
             error_limit: Self::DEFAULT_ERROR_LIMIT,
         }
@@ -27,7 +27,7 @@ impl Default for StabilityConfig {
 impl From<&Args> for StabilityConfig {
     fn from(args: &Args) -> Self {
         Self {
-            cooldown_duration: *args.cooldown_duration,
+            cooldown: *args.cooldown,
             stable_limit: args.stable_count,
             error_limit: args.error_count,
         }
@@ -73,7 +73,7 @@ impl FileStabilizer {
         let mut error_count = 0;
 
         loop {
-            tokio::time::sleep(self.config.cooldown_duration).await;
+            tokio::time::sleep(self.config.cooldown).await;
             match tokio::fs::metadata(&full_path).await {
                 Ok(metadata) => {
                     error_count = 0;

@@ -20,28 +20,28 @@ pub struct Args {
     #[arg(
         short,
         long,
-        env = "ARGUS_POLL_INTERVAL",
+        env = "ARGUS_POLL",
         default_value_t = humantime::Duration::from(Duration::from_secs(2))
     )]
-    pub poll_interval: humantime::Duration,
+    pub poll: humantime::Duration,
 
     /// Debounce duration (e.g. 5s, 10s)
     #[arg(
         short,
         long,
-        env = "ARGUS_DEBOUNCE_DURATION",
+        env = "ARGUS_DEBOUNCE",
         default_value_t = humantime::Duration::from(Duration::from_secs(5))
     )]
-    pub debounce_duration: humantime::Duration,
+    pub debounce: humantime::Duration,
 
     /// Cooldown interval for checking file stability (e.g. 10s, 30s)
     #[arg(
         short,
         long,
-        env = "ARGUS_COOLDOWN_DURATION",
-        default_value_t = humantime::Duration::from(StabilityConfig::default().cooldown_duration)
+        env = "ARGUS_COOLDOWN",
+        default_value_t = humantime::Duration::from(StabilityConfig::default().cooldown)
     )]
-    pub cooldown_duration: humantime::Duration,
+    pub cooldown: humantime::Duration,
 
     /// Number of consecutive stable checks required to consider the file created
     #[arg(
@@ -80,14 +80,14 @@ async fn main() -> anyhow::Result<()> {
 
     // 1. Set up the polling configuration
     let poll_config = Config::default()
-        .with_poll_interval(*args.poll_interval)
+        .with_poll_interval(*args.poll)
         .with_compare_contents(true);
 
     // 2. Initialize the full debouncer
     // We explicitly type it to use PollWatcher and the standard FileIdMap cache
     let mut _debouncer = new_debouncer_opt::<_, PollWatcher, FileIdMap>(
-        *args.debounce_duration, // Debounce timeout
-        None,                    // Tick rate (None = auto-calculated)
+        *args.debounce, // Debounce timeout
+        None,           // Tick rate (None = auto-calculated)
         move |res| {
             let _ = tx.send(res);
         },
