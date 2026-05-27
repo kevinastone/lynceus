@@ -9,6 +9,9 @@ use std::time::Duration;
 mod stability;
 use stability::{FileStabilizer, StabilityConfig};
 
+mod webhook;
+use webhook::WebhookClient;
+
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct Args {
@@ -144,7 +147,7 @@ async fn main() -> anyhow::Result<()> {
         })
         .buffer_unordered(100);
 
-    let client = reqwest::Client::new();
+    let webhook_client = args.webhook_url.as_ref().map(|url| WebhookClient::new(url.clone()));
     tokio::pin!(stability_stream);
 
     while let Some(result) = stability_stream.next().await {
@@ -152,35 +155,8 @@ async fn main() -> anyhow::Result<()> {
             Ok(relative_path) => {
                 tracing::info!(path = ?relative_path, "File created");
 
-                if let Some(ref webhook_url) = args.webhook_url {
-                    let client = client.clone();
-                    let url = webhook_url.clone();
-                    let path_str = relative_path.to_string_lossy().into_owned();
-                    tokio::spawn(async move {
-                        let payload = serde_json::json!({
-                            "event": "file_created",
-                            "path": path_str
-                        });
-                        match client.post(&url).json(&payload).send().await {
-                            Ok(resp) => {
-                                if resp.status().is_success() {
-                                    tracing::info!(
-                                        path = %path_str,
-                                        url = %url,
-                                        "Webhook notification sent successfully"
-                                    );
-                                } else {
-                                    tracing::error!(
-                                        status = ?resp.status(),
-                                        "Webhook returned non-success status code"
-                                    );
-                                }
-                            }
-                            Err(e) => {
-                                tracing::error!(error = ?e, "Failed to send webhook request");
-                            }
-                        }
-                    });
+                if let Some(ref client) = webhook_client {
+                    client.send_notification(&relative_path);
                 }
             }
             Err(relative_path) => {
