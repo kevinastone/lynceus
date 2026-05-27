@@ -138,10 +138,9 @@ async fn main() -> anyhow::Result<()> {
         .for_each(|result| {
             let webhook_client = webhook_client.clone();
             async move {
-                webhook_client
-                    .as_ref()
-                    .zip(result.ok())
-                    .map(|(client, path)| client.send_notification(&path));
+                if let Some((client, path)) = webhook_client.as_ref().zip(result.ok()) {
+                    client.send_notification(&path);
+                }
             }
         });
 
