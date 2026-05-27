@@ -1,9 +1,9 @@
 use anyhow::Context;
 use clap::Parser;
 use futures::prelude::*;
+use glob::Pattern;
 use notify::{Config, PollWatcher, RecursiveMode};
 use notify_debouncer_full::{FileIdMap, new_debouncer_opt};
-use wax::{Glob, Program};
 
 mod args;
 pub use args::Args;
@@ -37,7 +37,7 @@ async fn main() -> anyhow::Result<()> {
     let watch_path = std::fs::canonicalize(&absolute_path).unwrap_or(absolute_path);
 
     let pattern = match &args.pattern {
-        Some(pat) => Some(Glob::new(pat).context("Failed to parse pattern")?),
+        Some(pat) => Some(Pattern::new(pat).context("Failed to parse pattern")?),
         None => None,
     };
 
@@ -65,7 +65,7 @@ async fn main() -> anyhow::Result<()> {
         .with_context(|| format!("Failed to start watching path: {:?}", watch_path))?;
 
     if let Some(ref pat) = pattern {
-        tracing::info!(?watch_path, glob = %pat, "Watching for new files matching pattern");
+        tracing::info!(?watch_path, pattern = %pat, "Watching for new files matching pattern");
     } else {
         tracing::info!(?watch_path, "Watching for new files");
     }
@@ -87,7 +87,7 @@ async fn main() -> anyhow::Result<()> {
             let pattern = pattern.clone();
             move |relative_path| {
                 future::ready(match &pattern {
-                    Some(pat) => pat.is_match(relative_path.as_path()),
+                    Some(pat) => pat.matches_path(relative_path.as_path()),
                     None => true,
                 })
             }
