@@ -16,6 +16,10 @@ pub struct Args {
     #[arg(env = "ARGUS_PATH")]
     pub path: std::path::PathBuf,
 
+    /// Optional webhook URL to post a message to when a file is created
+    #[arg(env = "ARGUS_WEBHOOK_URL")]
+    pub webhook_url: Option<String>,
+
     /// Polling interval (e.g. 2s, 500ms)
     #[arg(
         short,
@@ -140,12 +144,38 @@ async fn main() -> anyhow::Result<()> {
         })
         .buffer_unordered(100);
 
+    let client = reqwest::Client::new();
     tokio::pin!(stability_stream);
 
     while let Some(result) = stability_stream.next().await {
         match result {
             Ok(relative_path) => {
                 tracing::info!(path = ?relative_path, "File created");
+
+                if let Some(ref webhook_url) = args.webhook_url {
+                    let client = client.clone();
+                    let url = webhook_url.clone();
+                    let path_str = relative_path.to_string_lossy().into_owned();
+                    tokio::spawn(async move {
+                        let payload = serde_json::json!({
+                            "event": "file_created",
+                            "path": path_str
+                        });
+                        match client.post(&url).json(&payload).send().await {
+                            Ok(resp) => {
+                                if !resp.status().is_success() {
+                                    tracing::error!(
+                                        status = ?resp.status(),
+                                        "Webhook returned non-success status code"
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                tracing::error!(error = ?e, "Failed to send webhook request");
+                            }
+                        }
+                    });
+                }
             }
             Err(relative_path) => {
                 tracing::error!(
