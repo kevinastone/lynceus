@@ -115,6 +115,10 @@
                   bashInteractive
                   coreutils
                 ];
+                pathsToLink = [
+                  "/bin"
+                  "/etc"
+                ];
               };
               config.Env = [
                 "LD_LIBRARY_PATH=${openssl}/lib"
