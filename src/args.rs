@@ -17,9 +17,14 @@ pub struct Args {
     #[arg(env = "ARGUS_WEBHOOK_URL")]
     pub webhook_url: Option<String>,
 
-    /// Optional JSON template for the webhook payload. Supports `{{path}}` and `{{event}}` placeholders (e.g. '{"event":"{{event}}","file":"{{path}}"}')
-    #[arg(long, env = "ARGUS_WEBHOOK_TEMPLATE")]
-    pub webhook_template: Option<String>,
+    /// Optional JSON template for the webhook payload. Supports `{{path}}` and `{{event}}` placeholders.
+    #[arg(
+        long,
+        env = "ARGUS_WEBHOOK_TEMPLATE",
+        value_parser = parse_json,
+        default_value = r#"{"event":"{{event}}","path":"{{path}}"}"#
+    )]
+    pub webhook_template: serde_json::Value,
 
     /// Polling interval (e.g. 2s, 500ms)
     #[arg(
@@ -65,4 +70,8 @@ pub struct Args {
         default_value_t = StabilityConfig::DEFAULT_ERROR_LIMIT
     )]
     pub error_count: std::num::NonZeroUsize,
+}
+
+fn parse_json(s: &str) -> Result<serde_json::Value, String> {
+    serde_json::from_str(s).map_err(|e| format!("invalid JSON: {}", e))
 }

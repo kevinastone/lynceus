@@ -6,7 +6,7 @@ use tokio_util::task::TaskTracker;
 pub struct WebhookClient {
     client: reqwest::Client,
     url: String,
-    template: serde_json::Value,
+    template: liquid_json::LiquidJson,
     tracker: TaskTracker,
 }
 
@@ -15,7 +15,7 @@ impl WebhookClient {
         Self {
             client: reqwest::Client::new(),
             url,
-            template,
+            template: liquid_json::LiquidJson::new(template),
             tracker,
         }
     }
@@ -24,12 +24,19 @@ impl WebhookClient {
     pub fn send_notification(&self, relative_path: &Path) {
         let client = self.client.clone();
         let url = self.url.clone();
-        let template = self.template.clone();
+        let tmpl = self.template.clone();
         let path_str = relative_path.to_string_lossy().into_owned();
 
         self.tracker.spawn(async move {
             let res = async {
-                let payload = render_template(&template, &path_str, "file_created");
+                let data = serde_json::json!({
+                    "path": path_str,
+                    "event": "file_created"
+                });
+                let payload = tmpl
+                    .render(&data)
+                    .map_err(|e| anyhow::anyhow!("Failed to render liquid template: {}", e))?;
+
                 let resp = client
                     .post(&url)
                     .json(&payload)
@@ -66,54 +73,35 @@ impl WebhookClient {
     }
 }
 
-fn render_template(template: &serde_json::Value, path: &str, event: &str) -> serde_json::Value {
-    match template {
-        serde_json::Value::String(s) => {
-            let rendered = s.replace("{{path}}", path).replace("{{event}}", event);
-            serde_json::Value::String(rendered)
-        }
-        serde_json::Value::Object(map) => {
-            let mut new_map = serde_json::Map::new();
-            for (k, v) in map {
-                let new_key = k.replace("{{path}}", path).replace("{{event}}", event);
-                new_map.insert(new_key, render_template(v, path, event));
-            }
-            serde_json::Value::Object(new_map)
-        }
-        serde_json::Value::Array(arr) => {
-            let rendered_arr = arr
-                .iter()
-                .map(|v| render_template(v, path, event))
-                .collect();
-            serde_json::Value::Array(rendered_arr)
-        }
-        other => other.clone(),
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
     use serde_json::json;
 
     #[test]
     fn test_render_template() {
         let template = json!({
-            "event": "{{event}}",
+            "event_upper": "{{event | upcase}}",
             "file_path": "{{path}}",
+            "filename": "{{path | split: '/' | last}}",
             "nested": {
-                "key_{{path}}": "value_{{event}}"
+                "key": "value_{{event}}"
             },
             "array": ["{{path}}", 42, true, null]
         });
 
-        let rendered = render_template(&template, "dir/file.txt", "file_created");
+        let tmpl = liquid_json::LiquidJson::new(template.clone());
+        let data = json!({
+            "path": "dir/file.txt",
+            "event": "file_created"
+        });
+        let rendered = tmpl.render(&data).unwrap();
 
         let expected = json!({
-            "event": "file_created",
+            "event_upper": "FILE_CREATED",
             "file_path": "dir/file.txt",
+            "filename": "file.txt",
             "nested": {
-                "key_dir/file.txt": "value_file_created"
+                "key": "value_file_created"
             },
             "array": ["dir/file.txt", 42, true, null]
         });

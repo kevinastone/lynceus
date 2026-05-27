@@ -43,7 +43,7 @@
           ## TODO: cargoLock fetching is broken
           ## https://github.com/NixOS/nixpkgs/pull/512735
           # cargoLock.lockFile = ./Cargo.lock;
-          cargoHash = "sha256-naKvuOucoxnjkXmE8sb0bKSg+i9Fjlh5VWU0r48syA8=";
+          cargoHash = "sha256-7Ergx/Wh6cd1qizVmugu0TmXuSai0bYM4x5tTxt3W8U=";
           buildInputs = with pkgs; [ openssl ];
           nativeBuildInputs = with pkgs; [ pkg-config ];
         };
