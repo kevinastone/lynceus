@@ -1,16 +1,19 @@
 use std::path::Path;
+use tokio_util::task::TaskTracker;
 
 #[derive(Clone)]
 pub struct WebhookClient {
     client: reqwest::Client,
     url: String,
+    tracker: TaskTracker,
 }
 
 impl WebhookClient {
-    pub fn new(url: String) -> Self {
+    pub fn new(url: String, tracker: TaskTracker) -> Self {
         Self {
             client: reqwest::Client::new(),
             url,
+            tracker,
         }
     }
 
@@ -20,7 +23,7 @@ impl WebhookClient {
         let url = self.url.clone();
         let path_str = relative_path.to_string_lossy().into_owned();
 
-        tokio::spawn(async move {
+        self.tracker.spawn(async move {
             let payload = serde_json::json!({
                 "event": "file_created",
                 "path": path_str

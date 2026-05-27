@@ -76,12 +76,13 @@ async fn main() -> anyhow::Result<()> {
     let stability_config = StabilityConfig::from(&args);
     let stabilizer = std::sync::Arc::new(FileStabilizer::new(target_path, stability_config));
 
+    let tracker = tokio_util::task::TaskTracker::new();
     let webhook_client = args
         .webhook_url
         .as_ref()
-        .map(|url| WebhookClient::new(url.clone()));
+        .map(|url| WebhookClient::new(url.clone(), tracker.clone()));
 
-    created_files_stream
+    let stream_future = created_files_stream
         .map({
             let stabilizer = stabilizer.clone();
             move |relative_path| {
@@ -113,8 +114,27 @@ async fn main() -> anyhow::Result<()> {
                     .zip(result.ok())
                     .map(|(client, path)| client.send_notification(&path));
             }
-        })
-        .await;
+        });
+
+    tokio::select! {
+        _ = stream_future => {
+            tracing::info!("Event stream finished");
+        }
+        _ = tokio::signal::ctrl_c() => {
+            tracing::info!("Shutdown signal received. Initiating graceful shutdown...");
+        }
+    }
+
+    tracker.close();
+
+    tokio::select! {
+        _ = tracker.wait() => {
+            tracing::info!("All pending webhook notifications sent successfully. Shutdown complete.");
+        }
+        _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => {
+            tracing::warn!("Graceful shutdown timed out (some webhooks did not complete). Exiting.");
+        }
+    }
 
     Ok(())
 }
