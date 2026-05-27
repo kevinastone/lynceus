@@ -1,9 +1,9 @@
 use anyhow::Context;
 use clap::Parser;
+use fast_glob::glob_match;
 use futures::prelude::*;
 use notify::{Config, PollWatcher, RecursiveMode};
 use notify_debouncer_full::{FileIdMap, new_debouncer_opt};
-use wax::{Glob, Pattern};
 
 mod args;
 pub use args::Args;
@@ -36,14 +36,7 @@ async fn main() -> anyhow::Result<()> {
 
     let watch_path = std::fs::canonicalize(&absolute_path).unwrap_or(absolute_path);
 
-    let pattern = match &args.pattern {
-        Some(pat) => Some(
-            Glob::new(pat)
-                .context("Failed to parse pattern")?
-                .into_owned(),
-        ),
-        None => None,
-    };
+    let pattern = args.pattern.clone();
 
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
@@ -95,7 +88,10 @@ async fn main() -> anyhow::Result<()> {
             let pattern = pattern.clone();
             move |relative_path| {
                 future::ready(match &pattern {
-                    Some(pat) => pat.is_match(relative_path.as_path()),
+                    Some(pat) => {
+                        let path_str = relative_path.to_string_lossy();
+                        glob_match(pat.as_bytes(), path_str.as_bytes())
+                    }
                     None => true,
                 })
             }
@@ -125,20 +121,22 @@ async fn main() -> anyhow::Result<()> {
             }
         })
         .buffer_unordered(100)
-        .inspect_ok(|relative_path| {
-            tracing::info!(path = ?relative_path, "File created");
-        })
-        .inspect_err(|relative_path| {
-            tracing::error!(
-                path = ?relative_path,
-                "Timeout waiting for file stability"
-            );
-        })
         .for_each(|result| {
             let webhook_client = webhook_client.clone();
             async move {
-                if let (Some(client), Ok(path)) = (webhook_client.as_ref(), result) {
-                    client.send_notification(&path);
+                match result {
+                    Ok(rel_path) => {
+                        tracing::info!(path = ?rel_path, "File created");
+                        if let Some(client) = webhook_client.as_ref() {
+                            client.send_notification(&rel_path);
+                        }
+                    }
+                    Err(rel_path) => {
+                        tracing::error!(
+                            path = ?rel_path,
+                            "Timeout waiting for file stability"
+                        );
+                    }
                 }
             }
         });

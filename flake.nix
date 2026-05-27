@@ -40,7 +40,7 @@
           pname = cargoToml.package.name;
           version = cargoToml.package.version;
           src = ./.;
-          cargoHash = "sha256-iuwUVjzguTwk+8Ix7pI20TMWP5qx6zWcXBXFCKegHLY=";
+          cargoHash = "sha256-jGp/6GgGimPAIgPIwwF2yJy9KsWGVwrZNC2fgf0ZGJU=";
           buildInputs = with pkgs; [ openssl ];
           nativeBuildInputs = with pkgs; [ pkg-config ];
         };
