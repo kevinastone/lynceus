@@ -1,3 +1,4 @@
+use anyhow::Context;
 use std::path::Path;
 use tokio_util::task::TaskTracker;
 
@@ -24,28 +25,37 @@ impl WebhookClient {
         let path_str = relative_path.to_string_lossy().into_owned();
 
         self.tracker.spawn(async move {
-            let payload = serde_json::json!({
-                "event": "file_created",
-                "path": path_str
-            });
+            let res = async {
+                let resp = client
+                    .post(&url)
+                    .body(path_str.clone())
+                    .send()
+                    .await
+                    .with_context(|| format!("Failed to send HTTP POST request to {}", url))?;
 
-            match client.post(&url).json(&payload).send().await {
-                Ok(resp) => {
-                    if resp.status().is_success() {
-                        tracing::info!(
-                            path = %path_str,
-                            url = %url,
-                            "Webhook notification sent successfully"
-                        );
-                    } else {
-                        tracing::error!(
-                            status = ?resp.status(),
-                            "Webhook returned non-success status code"
-                        );
-                    }
+                if !resp.status().is_success() {
+                    anyhow::bail!("Webhook server returned status {}", resp.status());
+                }
+
+                Ok::<(), anyhow::Error>(())
+            }
+            .await;
+
+            match res {
+                Ok(_) => {
+                    tracing::info!(
+                        path = %path_str,
+                        url = %url,
+                        "Webhook notification sent successfully"
+                    );
                 }
                 Err(e) => {
-                    tracing::error!(error = ?e, "Failed to send webhook request");
+                    tracing::error!(
+                        error = ?e,
+                        path = %path_str,
+                        url = %url,
+                        "Failed to send webhook notification"
+                    );
                 }
             }
         });

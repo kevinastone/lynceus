@@ -1,9 +1,8 @@
 use anyhow::Context;
 use clap::Parser;
-use futures::{StreamExt, TryStreamExt};
+use futures::prelude::*;
 use notify::{Config, PollWatcher, RecursiveMode};
 use notify_debouncer_full::{FileIdMap, new_debouncer_opt};
-use std::path::PathBuf;
 use wax::{Glob, Program};
 
 mod args;
@@ -35,16 +34,17 @@ async fn main() -> anyhow::Result<()> {
             .unwrap_or_else(|_| args.path.clone())
     };
 
-    let path_str = absolute_path.to_string_lossy();
-    let glob = Glob::new(&path_str).context("Failed to parse glob pattern")?;
-    let (prefix, glob_pattern) = glob.partition();
+    let watch_path = std::fs::canonicalize(&absolute_path).unwrap_or(absolute_path);
 
-    let watch_path = std::fs::canonicalize(&prefix).unwrap_or(prefix);
+    let pattern = match &args.pattern {
+        Some(pat) => Some(Glob::new(pat).context("Failed to parse pattern")?),
+        None => None,
+    };
 
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
     // 1. Set up the polling configuration
-    let poll_config = Config::default().with_poll_interval(*args.poll);
+    let poll_config = Config::default().with_poll_interval(*args.interval);
 
     // 2. Initialize the full debouncer
     // We explicitly type it to use PollWatcher and the standard FileIdMap cache
@@ -64,8 +64,8 @@ async fn main() -> anyhow::Result<()> {
         .watch(&watch_path, RecursiveMode::Recursive)
         .with_context(|| format!("Failed to start watching path: {:?}", watch_path))?;
 
-    if let Some(ref pattern) = glob_pattern {
-        tracing::info!(?watch_path, glob = %pattern, "Watching for new files matching glob");
+    if let Some(ref pat) = pattern {
+        tracing::info!(?watch_path, glob = %pat, "Watching for new files matching pattern");
     } else {
         tracing::info!(?watch_path, "Watching for new files");
     }
@@ -74,31 +74,22 @@ async fn main() -> anyhow::Result<()> {
     let event_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(rx);
 
     let created_files_stream = event_stream
-        .filter_map(|res| async move { res.ok() })
-        .flat_map({
+        .filter_map(|res| future::ready(res.ok()))
+        .flat_map(futures::stream::iter)
+        .filter(|e| future::ready(matches!(e.event.kind, notify::EventKind::Create(_))))
+        .flat_map(|e| futures::stream::iter(e.event.paths))
+        .filter(|p| future::ready(p.is_file()))
+        .filter_map({
             let watch_path = watch_path.clone();
-            let glob_pattern = glob_pattern.clone();
-            move |events| {
-                let watch_path = watch_path.clone();
-                let glob_pattern = glob_pattern.clone();
-                let paths: Vec<PathBuf> = events
-                    .into_iter()
-                    .filter(|e| matches!(e.event.kind, notify::EventKind::Create(_)))
-                    .flat_map(|e| e.event.paths)
-                    .filter(|p| p.is_file())
-                    .filter_map({
-                        let watch_path = watch_path.clone();
-                        move |p| p.strip_prefix(&watch_path).ok().map(|r| r.to_path_buf())
-                    })
-                    .filter(move |relative_path| {
-                        if let Some(ref pattern) = glob_pattern {
-                            pattern.is_match(relative_path.as_path())
-                        } else {
-                            true
-                        }
-                    })
-                    .collect();
-                futures::stream::iter(paths)
+            move |p| future::ready(p.strip_prefix(&watch_path).ok().map(|r| r.to_path_buf()))
+        })
+        .filter({
+            let pattern = pattern.clone();
+            move |relative_path| {
+                future::ready(match &pattern {
+                    Some(pat) => pat.is_match(relative_path.as_path()),
+                    None => true,
+                })
             }
         });
 

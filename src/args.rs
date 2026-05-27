@@ -5,9 +5,13 @@ use std::time::Duration;
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct Args {
-    /// Path or glob pattern to watch for changes (e.g. /path/to/watch/**/*.txt)
+    /// Path to watch for changes
     #[arg(env = "ARGUS_PATH")]
     pub path: std::path::PathBuf,
+
+    /// Optional glob pattern relative to the watch path to filter created files (e.g. "**/*.txt")
+    #[arg(short, long, env = "ARGUS_PATTERN")]
+    pub pattern: Option<String>,
 
     /// Optional webhook URL to post a message to when a file is created
     #[arg(env = "ARGUS_WEBHOOK_URL")]
@@ -17,10 +21,10 @@ pub struct Args {
     #[arg(
         short,
         long,
-        env = "ARGUS_POLL",
+        env = "ARGUS_INTERVAL",
         default_value_t = humantime::Duration::from(Duration::from_secs(2))
     )]
-    pub poll: humantime::Duration,
+    pub interval: humantime::Duration,
 
     /// Debounce duration (e.g. 5s, 10s)
     #[arg(
@@ -47,7 +51,7 @@ pub struct Args {
         env = "ARGUS_STABLE_COUNT",
         default_value_t = StabilityConfig::DEFAULT_STABLE_LIMIT
     )]
-    pub stable_count: usize,
+    pub stable_count: std::num::NonZeroUsize,
 
     /// Number of consecutive error checks before timing out/giving up on the file
     #[arg(
@@ -56,5 +60,5 @@ pub struct Args {
         env = "ARGUS_ERROR_COUNT",
         default_value_t = StabilityConfig::DEFAULT_ERROR_LIMIT
     )]
-    pub error_count: usize,
+    pub error_count: std::num::NonZeroUsize,
 }

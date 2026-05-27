@@ -1,17 +1,24 @@
 use crate::Args;
+use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::time::Duration;
 
 #[derive(Clone, Copy, Debug)]
 pub struct StabilityConfig {
     pub cooldown: Duration,
-    pub stable_limit: usize,
-    pub error_limit: usize,
+    pub stable_limit: NonZeroUsize,
+    pub error_limit: NonZeroUsize,
 }
 
 impl StabilityConfig {
-    pub const DEFAULT_STABLE_LIMIT: usize = 3;
-    pub const DEFAULT_ERROR_LIMIT: usize = 5;
+    pub const DEFAULT_STABLE_LIMIT: NonZeroUsize = match NonZeroUsize::new(3) {
+        Some(val) => val,
+        None => panic!("DEFAULT_STABLE_LIMIT must be non-zero"),
+    };
+    pub const DEFAULT_ERROR_LIMIT: NonZeroUsize = match NonZeroUsize::new(5) {
+        Some(val) => val,
+        None => panic!("DEFAULT_ERROR_LIMIT must be non-zero"),
+    };
 }
 
 impl Default for StabilityConfig {
@@ -88,7 +95,7 @@ impl FileStabilizer {
                             stable_count,
                             "File is stable"
                         );
-                        if stable_count >= self.config.stable_limit {
+                        if stable_count >= self.config.stable_limit.get() {
                             return Ok(relative_path);
                         }
                     } else {
@@ -114,7 +121,7 @@ impl FileStabilizer {
                         error_count,
                         "Failed to read metadata"
                     );
-                    if error_count >= self.config.error_limit {
+                    if error_count >= self.config.error_limit.get() {
                         return Err(relative_path);
                     }
                 }
