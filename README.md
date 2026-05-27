@@ -98,3 +98,18 @@ $ RUST_LOG=debug cargo run -- /path/to/watch
 2026-05-27T08:00:35Z DEBUG argus: File is stable path="video.mp4" size="10.00 MiB" stable_count=3
 2026-05-27T08:00:35Z  INFO argus: File created path="video.mp4"
 ```
+
+---
+
+## CI/CD Workflows
+
+Argus is configured with modern GitHub Actions workflows for continuous integration and automated container delivery:
+
+1. **Test Suite (`test.yaml`)**:
+   - Triggered on all `push` and `pull_request` events.
+   - Builds the binary, runs a strict `clippy` analysis (`-D warnings`), and executes all unit/integration tests across both `stable` and `beta` Rust toolchains.
+
+2. **Container Delivery (`container_image.yaml`)**:
+   - Triggered automatically upon a successful `Test` run on the `main` branch.
+   - Leverages **Nix** (`nix build .#image`) for high-performance, reproducible, minimal, and fully-declarative Docker/OCI image construction.
+   - Pushes the resulting container image securely to the GitHub Container Registry (GHCR) at `ghcr.io/kevinastone/argus` using **Skopeo**.
