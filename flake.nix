@@ -2,15 +2,6 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     utils.url = "github:numtide/flake-utils";
-    fenix = {
-      url = "github:nix-community/fenix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    naersk = {
-      url = "github:nix-community/naersk/master";
-      inputs.fenix.follows = "fenix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     treefmt-nix.url = "github:numtide/treefmt-nix";
     treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
   };
@@ -19,8 +10,6 @@
     {
       nixpkgs,
       utils,
-      naersk,
-      fenix,
       treefmt-nix,
       ...
     }:
@@ -28,33 +17,10 @@
       system:
       let
         pkgs = import nixpkgs { inherit system; };
-        inherit (fenix.packages.${system}) stable;
-        toolchain = fenix.packages.${system}.combine [
-          stable.cargo
-          stable.rustc
-          stable.rustfmt
-          stable.clippy
-        ];
-        # A custom fetchurl that injects a User-Agent header, which is
-        # required to avoid 403 Forbidden errors when downloading crates from crates.io.
-        customFetchurl =
-          args:
-          pkgs.fetchurl (
-            args
-            // {
-              curlOpts = (args.curlOpts or "") + " --user-agent kstone-argus-downloader/1.0";
-            }
-          );
-        lib = pkgs.callPackage naersk {
-          cargo = toolchain;
-          rustc = toolchain;
-          fetchurl = customFetchurl;
-        };
         treefmtStack = treefmt-nix.lib.evalModule pkgs {
           projectRootFile = "flake.nix";
           programs.rustfmt = {
             enable = true;
-            package = toolchain;
             edition = "2024";
           };
           # Nix formatters
@@ -67,44 +33,51 @@
             nixfmt.priority = 3;
           };
         };
+
+        cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
+
         commonArgs = {
+          pname = cargoToml.package.name;
+          version = cargoToml.package.version;
           src = ./.;
+          cargoHash = "sha256-WwVHqxC/p6TMiVa48LODvok3UEfM8vAUaBAGWrLOCls=";
           buildInputs = with pkgs; [ openssl ];
-          nativeBuildInputs = [
-            pkgs.pkg-config
-            # Force the use of nixpkgs bintools for linking
-            pkgs.llvmPackages.bintools
-          ];
-          # Tell fenix's rustc not to use its bundled lld,
-          # preserving Nix's dynamic RPATH patching.
-          CARGO_BUILD_RUSTFLAGS = "-Clink-self-contained=-linker";
+          nativeBuildInputs = with pkgs; [ pkg-config ];
         };
+
+        argus = pkgs.rustPlatform.buildRustPackage commonArgs;
       in
       {
         packages = rec {
-          argus = lib.buildPackage commonArgs;
+          inherit argus;
           bin = argus;
           default = argus;
 
-          check = lib.buildPackage (
+          check = pkgs.rustPlatform.buildRustPackage (
             commonArgs
             // {
-              mode = "check";
-              release = false;
+              pname = "argus-check";
+              buildPhase = "cargo check";
+              installPhase = "touch $out";
             }
           );
-          clippy = lib.buildPackage (
+
+          clippy = pkgs.rustPlatform.buildRustPackage (
             commonArgs
             // {
-              mode = "clippy";
-              release = false;
+              pname = "argus-clippy";
+              nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ pkgs.clippy ];
+              buildPhase = "cargo clippy -- -D warnings";
+              installPhase = "touch $out";
             }
           );
-          test = lib.buildPackage (
+
+          test = pkgs.rustPlatform.buildRustPackage (
             commonArgs
             // {
-              mode = "test";
-              release = false;
+              pname = "argus-test";
+              buildPhase = "cargo test";
+              installPhase = "touch $out";
             }
           );
 
@@ -117,7 +90,6 @@
                 paths = [
                   cacert
                   argus
-                  # openssl.out
                   bashInteractive
                   coreutils
                 ];
@@ -127,7 +99,6 @@
                 ];
               };
               config.Env = [
-                # "LD_LIBRARY_PATH=${openssl.out}/lib"
                 "SSL_CERT_FILE=${cacert}/etc/ssl/certs/ca-bundle.crt"
               ];
               config.Entrypoint = [ "/bin/argus" ];
@@ -147,7 +118,13 @@
         devShells.default =
           with pkgs;
           mkShell {
-            nativeBuildInputs = [ toolchain ] ++ commonArgs.nativeBuildInputs;
+            nativeBuildInputs = [
+              rustc
+              cargo
+              rustfmt
+              clippy
+            ]
+            ++ commonArgs.nativeBuildInputs;
             inherit (commonArgs) buildInputs;
             packages = [
               skopeo
