@@ -113,6 +113,7 @@
                   argus
                   openssl
                   bashInteractive
+                  coreutils
                 ];
               };
               config.Env = [
