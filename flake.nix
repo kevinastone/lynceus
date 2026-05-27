@@ -40,7 +40,7 @@
           pname = cargoToml.package.name;
           version = cargoToml.package.version;
           src = ./.;
-          cargoHash = "sha256-WwVHqxC/p6TMiVa48LODvok3UEfM8vAUaBAGWrLOCls=";
+          cargoHash = "sha256-iuwUVjzguTwk+8Ix7pI20TMWP5qx6zWcXBXFCKegHLY=";
           buildInputs = with pkgs; [ openssl ];
           nativeBuildInputs = with pkgs; [ pkg-config ];
         };
@@ -104,7 +104,7 @@
               config.Entrypoint = [ "/bin/argus" ];
               config.Labels = {
                 "org.opencontainers.image.title" = "argus";
-                "org.opencontainers.image.source" = "https://github.com/kstone/argus";
+                "org.opencontainers.image.source" = "https://github.com/kevinastone/argus";
                 "org.opencontainers.image.description" = ''
                   argus is a file watcher that reports file changes using a webhook.
                 '';
