@@ -12,5 +12,6 @@ humantime = "2.1.0"
 notify = "8.2.0"
 notify-debouncer-full = "0.7.0"
 tokio = { version = "1.52.3", features = ["full"] }
+tokio-stream = { version = "0.1.16", features = ["sync"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }

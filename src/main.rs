@@ -104,11 +104,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(?target_path, "Watching for new files");
 
     // Turn mpsc receiver into an async stream
-    let event_stream =
-        futures::stream::unfold(
-            rx,
-            |mut rx| async move { rx.recv().await.map(|val| (val, rx)) },
-        );
+    let event_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(rx);
 
     let created_files_stream = event_stream
         .filter_map(|res| async move { res.ok() })
