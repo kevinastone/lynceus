@@ -108,9 +108,12 @@
               name = "argus";
               copyToRoot = buildEnv {
                 name = "image-root";
-                paths = [ cacert ];
+                paths = [
+                  cacert
+                  argus
+                ];
               };
-              config.Entrypoint = [ "${argus}/bin/argus" ];
+              config.Entrypoint = [ "/bin/argus" ];
               config.Labels = {
                 "org.opencontainers.image.title" = "argus";
                 "org.opencontainers.image.source" = "https://github.com/kstone/argus";
