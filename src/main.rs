@@ -68,8 +68,12 @@ async fn main() -> anyhow::Result<()> {
         .watch(&watch_path, RecursiveMode::Recursive)
         .with_context(|| format!("Failed to start watching path: {:?}", watch_path))?;
 
-    if let Some(ref pat) = pattern {
-        tracing::info!(?watch_path, pattern = ?pat, "Watching for new files matching pattern");
+    if let Some(ref pat) = args.pattern {
+        tracing::info!(
+            ?watch_path,
+            pattern = %pat,
+            "Watching for new files matching pattern"
+        );
     } else {
         tracing::info!(?watch_path, "Watching for new files");
     }
