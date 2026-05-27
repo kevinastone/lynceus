@@ -1,19 +1,31 @@
 use anyhow::Context;
+use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
+use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
 use std::path::Path;
 use tokio_util::task::TaskTracker;
 
 #[derive(Clone)]
 pub struct WebhookClient {
-    client: reqwest::Client,
+    client: ClientWithMiddleware,
     url: String,
     template: liquid_json::LiquidJson,
     tracker: TaskTracker,
 }
 
 impl WebhookClient {
-    pub fn new(url: String, template: serde_json::Value, tracker: TaskTracker) -> Self {
+    pub fn new(
+        url: String,
+        template: serde_json::Value,
+        retries: usize,
+        tracker: TaskTracker,
+    ) -> Self {
+        let retry_policy = ExponentialBackoff::builder().build_with_max_retries(retries as u32);
+        let client = ClientBuilder::new(reqwest::Client::new())
+            .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+            .build();
+
         Self {
-            client: reqwest::Client::new(),
+            client,
             url,
             template: liquid_json::LiquidJson::new(template),
             tracker,
@@ -75,7 +87,9 @@ impl WebhookClient {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use serde_json::json;
+    use std::path::Path;
 
     #[test]
     fn test_render_template() {
@@ -107,5 +121,109 @@ mod tests {
         });
 
         assert_eq!(rendered, expected);
+    }
+
+    #[tokio::test]
+    async fn test_webhook_retry_success() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let url = format!("http://127.0.0.1:{}", port);
+
+        let tracker = TaskTracker::new();
+        let client = WebhookClient::new(
+            url,
+            json!({"path": "{{path}}"}),
+            2, // 2 retries (up to 3 attempts)
+            tracker.clone(),
+        );
+
+        // Spawn mock server
+        tokio::spawn(async move {
+            // Attempt 1: return 500
+            if let Ok((mut stream, _)) = listener.accept().await {
+                let mut buf = [0; 1024];
+                let _ = stream.read(&mut buf).await;
+                let response = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n";
+                let _ = stream.write_all(response.as_bytes()).await;
+            }
+            // Attempt 2: return 500
+            if let Ok((mut stream, _)) = listener.accept().await {
+                let mut buf = [0; 1024];
+                let _ = stream.read(&mut buf).await;
+                let response = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n";
+                let _ = stream.write_all(response.as_bytes()).await;
+            }
+            // Attempt 3: return 200
+            if let Ok((mut stream, _)) = listener.accept().await {
+                let mut buf = [0; 1024];
+                let _ = stream.read(&mut buf).await;
+                let response = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n";
+                let _ = stream.write_all(response.as_bytes()).await;
+            }
+        });
+
+        client.send_notification(Path::new("test.txt"));
+
+        // Wait for webhook to finish
+        tracker.close();
+        let finished = tokio::select! {
+            _ = tracker.wait() => true,
+            _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => false,
+        };
+
+        assert!(
+            finished,
+            "Webhook notification took too long or failed to complete"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_webhook_retry_failure() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let url = format!("http://127.0.0.1:{}", port);
+
+        let tracker = TaskTracker::new();
+        let client = WebhookClient::new(
+            url,
+            json!({"path": "{{path}}"}),
+            1, // 1 retry (up to 2 attempts)
+            tracker.clone(),
+        );
+
+        // Spawn mock server
+        tokio::spawn(async move {
+            // Attempt 1: return 500
+            if let Ok((mut stream, _)) = listener.accept().await {
+                let mut buf = [0; 1024];
+                let _ = stream.read(&mut buf).await;
+                let response = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n";
+                let _ = stream.write_all(response.as_bytes()).await;
+            }
+            // Attempt 2: return 500
+            if let Ok((mut stream, _)) = listener.accept().await {
+                let mut buf = [0; 1024];
+                let _ = stream.read(&mut buf).await;
+                let response = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n";
+                let _ = stream.write_all(response.as_bytes()).await;
+            }
+            // No more connections expected because it gives up after 2 attempts.
+        });
+
+        client.send_notification(Path::new("test.txt"));
+
+        tracker.close();
+        let finished = tokio::select! {
+            _ = tracker.wait() => true,
+            _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => false,
+        };
+
+        assert!(finished, "Webhook notification took too long to fail");
     }
 }

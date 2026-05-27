@@ -26,6 +26,10 @@ pub struct Args {
     )]
     pub webhook_template: serde_json::Value,
 
+    /// Number of retries when sending a webhook fails
+    #[arg(long, env = "ARGUS_WEBHOOK_RETRIES", default_value_t = 3)]
+    pub webhook_retries: usize,
+
     /// Polling interval (e.g. 2s, 500ms)
     #[arg(
         short,

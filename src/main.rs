@@ -101,9 +101,14 @@ async fn main() -> anyhow::Result<()> {
     let stabilizer = std::sync::Arc::new(FileStabilizer::new(watch_path, stability_config));
 
     let tracker = tokio_util::task::TaskTracker::new();
-    let webhook_client = args
-        .webhook_url
-        .map(|url| WebhookClient::new(url, args.webhook_template, tracker.clone()));
+    let webhook_client = args.webhook_url.map(|url| {
+        WebhookClient::new(
+            url,
+            args.webhook_template,
+            args.webhook_retries,
+            tracker.clone(),
+        )
+    });
 
     let stream_future = created_files_stream
         .map({
