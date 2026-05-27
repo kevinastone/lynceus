@@ -1,6 +1,6 @@
 use anyhow::Context;
 use clap::Parser;
-use futures::StreamExt;
+use futures::{StreamExt, TryStreamExt};
 use notify::{Config, PollWatcher, RecursiveMode};
 use notify_debouncer_full::{FileIdMap, new_debouncer_opt};
 use std::path::PathBuf;
@@ -90,7 +90,16 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         })
-        .buffer_unordered(100);
+        .buffer_unordered(100)
+        .inspect_ok(|relative_path| {
+            tracing::info!(path = ?relative_path, "File created");
+        })
+        .inspect_err(|relative_path| {
+            tracing::error!(
+                path = ?relative_path,
+                "Timeout waiting for file stability"
+            );
+        });
 
     let webhook_client = args
         .webhook_url
@@ -99,19 +108,9 @@ async fn main() -> anyhow::Result<()> {
     tokio::pin!(stability_stream);
 
     while let Some(result) = stability_stream.next().await {
-        match result {
-            Ok(relative_path) => {
-                tracing::info!(path = ?relative_path, "File created");
-
-                if let Some(ref client) = webhook_client {
-                    client.send_notification(&relative_path);
-                }
-            }
-            Err(relative_path) => {
-                tracing::error!(
-                    path = ?relative_path,
-                    "Timeout waiting for file stability"
-                );
+        if let Ok(relative_path) = result {
+            if let Some(ref client) = webhook_client {
+                client.send_notification(&relative_path);
             }
         }
     }
