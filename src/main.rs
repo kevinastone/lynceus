@@ -163,7 +163,13 @@ async fn main() -> anyhow::Result<()> {
                         });
                         match client.post(&url).json(&payload).send().await {
                             Ok(resp) => {
-                                if !resp.status().is_success() {
+                                if resp.status().is_success() {
+                                    tracing::info!(
+                                        path = %path_str,
+                                        url = %url,
+                                        "Webhook notification sent successfully"
+                                    );
+                                } else {
                                     tracing::error!(
                                         status = ?resp.status(),
                                         "Webhook returned non-success status code"
