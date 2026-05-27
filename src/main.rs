@@ -7,10 +7,10 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 mod stability;
-use stability::{StabilityConfig, wait_for_file_stability};
+use stability::{StabilityConfig, FileStabilizer};
 
 #[derive(Parser, Debug)]
-#[command(version, about, long_about = None)]
+#[command(author, version, about, long_about = None)]
 pub struct Args {
     /// Path to watch for changes
     #[arg(env = "ARGUS_PATH")]
@@ -128,17 +128,20 @@ async fn main() -> anyhow::Result<()> {
         });
 
     let stability_config = StabilityConfig::from(&args);
+    let stabilizer = std::sync::Arc::new(FileStabilizer::new(target_path, stability_config));
 
     let stability_stream = created_files_stream
         .map({
-            let target_path = target_path.clone();
+            let stabilizer = stabilizer.clone();
             move |relative_path| {
-                let full_path = target_path.join(&relative_path);
-                tracing::debug!(
-                    path = ?relative_path,
-                    "New file detected, waiting for write to complete"
-                );
-                wait_for_file_stability(full_path, relative_path, stability_config)
+                let stabilizer = stabilizer.clone();
+                async move {
+                    tracing::debug!(
+                        path = ?relative_path,
+                        "New file detected, waiting for write to complete"
+                    );
+                    stabilizer.wait(relative_path).await
+                }
             }
         })
         .buffer_unordered(100);

@@ -55,61 +55,69 @@ fn humanize_bytes(bytes: u64) -> String {
     }
 }
 
-pub async fn wait_for_file_stability(
-    full_path: PathBuf,
-    relative_path: PathBuf,
+pub struct FileStabilizer {
+    root_path: PathBuf,
     config: StabilityConfig,
-) -> Result<PathBuf, PathBuf> {
-    let mut last_size = None;
-    let mut last_modified = None;
-    let mut stable_count = 0;
-    let mut error_count = 0;
+}
 
-    loop {
-        tokio::time::sleep(config.cooldown_duration).await;
-        match tokio::fs::metadata(&full_path).await {
-            Ok(metadata) => {
-                error_count = 0;
-                let current_size = metadata.len();
-                let current_modified = metadata.modified().ok();
+impl FileStabilizer {
+    pub fn new(root_path: PathBuf, config: StabilityConfig) -> Self {
+        Self { root_path, config }
+    }
 
-                if Some(current_size) == last_size && current_modified == last_modified {
-                    stable_count += 1;
-                    let size_str = humanize_bytes(current_size);
-                    tracing::debug!(
-                        path = ?relative_path,
-                        size = %size_str,
-                        stable_count,
-                        "File is stable"
-                    );
-                    if stable_count >= config.stable_limit {
-                        return Ok(relative_path);
+    pub async fn wait(&self, relative_path: PathBuf) -> Result<PathBuf, PathBuf> {
+        let full_path = self.root_path.join(&relative_path);
+        let mut last_size = None;
+        let mut last_modified = None;
+        let mut stable_count = 0;
+        let mut error_count = 0;
+
+        loop {
+            tokio::time::sleep(self.config.cooldown_duration).await;
+            match tokio::fs::metadata(&full_path).await {
+                Ok(metadata) => {
+                    error_count = 0;
+                    let current_size = metadata.len();
+                    let current_modified = metadata.modified().ok();
+
+                    if Some(current_size) == last_size && current_modified == last_modified {
+                        stable_count += 1;
+                        let size_str = humanize_bytes(current_size);
+                        tracing::debug!(
+                            path = ?relative_path,
+                            size = %size_str,
+                            stable_count,
+                            "File is stable"
+                        );
+                        if stable_count >= self.config.stable_limit {
+                            return Ok(relative_path);
+                        }
+                    } else {
+                        let old_size_str = last_size.map(humanize_bytes);
+                        let new_size_str = humanize_bytes(current_size);
+                        tracing::debug!(
+                            path = ?relative_path,
+                            old_size = ?old_size_str,
+                            new_size = %new_size_str,
+                            "File size or modification time changed, resetting stable count"
+                        );
+                        last_size = Some(current_size);
+                        last_modified = current_modified;
+                        stable_count = 0;
                     }
-                } else {
-                    let old_size_str = last_size.map(humanize_bytes);
-                    let new_size_str = humanize_bytes(current_size);
+                }
+                Err(e) => {
+                    stable_count = 0;
+                    error_count += 1;
                     tracing::debug!(
                         path = ?relative_path,
-                        old_size = ?old_size_str,
-                        new_size = %new_size_str,
-                        "File size or modification time changed, resetting stable count"
+                        error = ?e,
+                        error_count,
+                        "Failed to read metadata"
                     );
-                    last_size = Some(current_size);
-                    last_modified = current_modified;
-                    stable_count = 0;
-                }
-            }
-            Err(e) => {
-                stable_count = 0;
-                error_count += 1;
-                tracing::debug!(
-                    path = ?relative_path,
-                    error = ?e,
-                    error_count,
-                    "Failed to read metadata"
-                );
-                if error_count >= config.error_limit {
-                    return Err(relative_path);
+                    if error_count >= self.config.error_limit {
+                        return Err(relative_path);
+                    }
                 }
             }
         }
