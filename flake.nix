@@ -34,7 +34,7 @@
           };
         };
 
-        cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
+        cargoToml = fromTOML (builtins.readFile ./Cargo.toml);
 
         commonArgs = {
           pname = cargoToml.package.name;
