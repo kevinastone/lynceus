@@ -17,6 +17,10 @@ pub struct Args {
     #[arg(env = "ARGUS_WEBHOOK_URL")]
     pub webhook_url: Option<String>,
 
+    /// Optional JSON template for the webhook payload. Supports `{{path}}` and `{{event}}` placeholders (e.g. '{"event":"{{event}}","file":"{{path}}"}')
+    #[arg(long, env = "ARGUS_WEBHOOK_TEMPLATE")]
+    pub webhook_template: Option<String>,
+
     /// Polling interval (e.g. 2s, 500ms)
     #[arg(
         short,

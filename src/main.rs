@@ -104,7 +104,16 @@ async fn main() -> anyhow::Result<()> {
     let webhook_client = args
         .webhook_url
         .as_ref()
-        .map(|url| WebhookClient::new(url.clone(), tracker.clone()));
+        .map(|url| {
+            let template_str = args
+                .webhook_template
+                .as_deref()
+                .unwrap_or(r#"{"event":"file_created","path":"{{path}}"}"#);
+            let template: serde_json::Value = serde_json::from_str(template_str)
+                .context("Failed to parse webhook payload template as valid JSON")?;
+            Ok::<_, anyhow::Error>(WebhookClient::new(url.clone(), template, tracker.clone()))
+        })
+        .transpose()?;
 
     let stream_future = created_files_stream
         .map({
