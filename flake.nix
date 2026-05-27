@@ -56,38 +56,40 @@
             nixfmt.priority = 3;
           };
         };
+        commonArgs = {
+          src = ./.;
+          buildInputs = with pkgs; [ openssl ];
+          nativeBuildInputs = with pkgs; [ pkg-config ];
+          CARGO_HTTP_USER_AGENT = "kstone/argus (://github.com/kstone/argus)";
+        };
       in
       {
         packages = rec {
-          argus = lib.buildPackage {
-            src = ./.;
-            buildInputs = with pkgs; [ openssl ];
-            nativeBuildInputs = with pkgs; [ pkg-config ];
-          };
+          argus = lib.buildPackage commonArgs;
           bin = argus;
           default = argus;
 
-          check = lib.buildPackage {
-            src = ./.;
-            mode = "check";
-            release = false;
-            buildInputs = with pkgs; [ openssl ];
-            nativeBuildInputs = with pkgs; [ pkg-config ];
-          };
-          clippy = lib.buildPackage {
-            src = ./.;
-            mode = "clippy";
-            release = false;
-            buildInputs = with pkgs; [ openssl ];
-            nativeBuildInputs = with pkgs; [ pkg-config ];
-          };
-          test = lib.buildPackage {
-            src = ./.;
-            mode = "test";
-            release = false;
-            buildInputs = with pkgs; [ openssl ];
-            nativeBuildInputs = with pkgs; [ pkg-config ];
-          };
+          check = lib.buildPackage (
+            commonArgs
+            // {
+              mode = "check";
+              release = false;
+            }
+          );
+          clippy = lib.buildPackage (
+            commonArgs
+            // {
+              mode = "clippy";
+              release = false;
+            }
+          );
+          test = lib.buildPackage (
+            commonArgs
+            // {
+              mode = "test";
+              release = false;
+            }
+          );
 
           image =
             with pkgs;
@@ -114,7 +116,8 @@
         devShells.default =
           with pkgs;
           mkShell {
-            nativeBuildInputs = [ toolchain ];
+            nativeBuildInputs = [ toolchain ] ++ commonArgs.nativeBuildInputs;
+            inherit (commonArgs) buildInputs CARGO_HTTP_USER_AGENT;
             packages = [
               skopeo
               cargo-outdated
