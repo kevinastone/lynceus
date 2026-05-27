@@ -26,9 +26,13 @@ impl WebhookClient {
 
         self.tracker.spawn(async move {
             let res = async {
+                let payload = serde_json::json!({
+                    "event": "file_created",
+                    "path": path_str
+                });
                 let resp = client
                     .post(&url)
-                    .body(path_str.clone())
+                    .json(&payload)
                     .send()
                     .await
                     .with_context(|| format!("Failed to send HTTP POST request to {}", url))?;

@@ -79,6 +79,7 @@ dependencies = [
  "notify",
  "notify-debouncer-full",
  "reqwest",
+ "serde_json",
  "tokio",
  "tokio-stream",
  "tokio-util",

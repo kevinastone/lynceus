@@ -40,7 +40,10 @@
           pname = cargoToml.package.name;
           version = cargoToml.package.version;
           src = ./.;
-          cargoHash = "sha256-jGp/6GgGimPAIgPIwwF2yJy9KsWGVwrZNC2fgf0ZGJU=";
+          ## TODO: cargoLock fetching is broken
+          ## https://github.com/NixOS/nixpkgs/pull/512735
+          # cargoLock.lockFile = ./Cargo.lock;
+          cargoHash = "sha256-naKvuOucoxnjkXmE8sb0bKSg+i9Fjlh5VWU0r48syA8=";
           buildInputs = with pkgs; [ openssl ];
           nativeBuildInputs = with pkgs; [ pkg-config ];
         };
