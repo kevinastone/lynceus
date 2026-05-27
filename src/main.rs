@@ -76,7 +76,12 @@ async fn main() -> anyhow::Result<()> {
     let stability_config = StabilityConfig::from(&args);
     let stabilizer = std::sync::Arc::new(FileStabilizer::new(target_path, stability_config));
 
-    let stability_stream = created_files_stream
+    let webhook_client = args
+        .webhook_url
+        .as_ref()
+        .map(|url| WebhookClient::new(url.clone()));
+
+    created_files_stream
         .map({
             let stabilizer = stabilizer.clone();
             move |relative_path| {
@@ -99,21 +104,18 @@ async fn main() -> anyhow::Result<()> {
                 path = ?relative_path,
                 "Timeout waiting for file stability"
             );
-        });
-
-    let webhook_client = args
-        .webhook_url
-        .as_ref()
-        .map(|url| WebhookClient::new(url.clone()));
-    tokio::pin!(stability_stream);
-
-    while let Some(result) = stability_stream.next().await {
-        if let Ok(relative_path) = result {
-            if let Some(ref client) = webhook_client {
-                client.send_notification(&relative_path);
+        })
+        .for_each(|result| {
+            let webhook_client = webhook_client.clone();
+            async move {
+                if let Ok(relative_path) = result {
+                    if let Some(ref client) = webhook_client {
+                        client.send_notification(&relative_path);
+                    }
+                }
             }
-        }
-    }
+        })
+        .await;
 
     Ok(())
 }
