@@ -40,7 +40,7 @@ async fn main() -> anyhow::Result<()> {
 
     for component in absolute_path.components() {
         let comp_str = component.as_os_str().to_string_lossy();
-        if comp_str.contains(['*', '?', '[', ']']) {
+        if comp_str.contains(['*', '?', '[', ']', '{', '}']) {
             let pattern = glob::Pattern::new(&path_str).context("Failed to parse glob pattern")?;
             glob_pattern = Some(pattern);
             break;
