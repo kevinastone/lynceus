@@ -35,42 +35,24 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let path_str = absolute_path.to_string_lossy();
-    let has_glob = path_str.contains('*')
-        || path_str.contains('?')
-        || path_str.contains('[')
-        || path_str.contains(']');
+    let mut watch_path = PathBuf::new();
+    let mut glob_pattern = None;
 
-    let (watch_path, glob_pattern) = if has_glob {
-        let mut base_path = PathBuf::new();
-        let mut components = absolute_path.components().peekable();
-
-        while let Some(component) = components.peek() {
-            let comp_str = component.as_os_str().to_string_lossy();
-            if comp_str.contains('*')
-                || comp_str.contains('?')
-                || comp_str.contains('[')
-                || comp_str.contains(']')
-            {
-                break;
-            }
-            base_path.push(component);
-            components.next();
+    for component in absolute_path.components() {
+        let comp_str = component.as_os_str().to_string_lossy();
+        if comp_str.contains(['*', '?', '[', ']']) {
+            let pattern = glob::Pattern::new(&path_str).context("Failed to parse glob pattern")?;
+            glob_pattern = Some(pattern);
+            break;
         }
+        watch_path.push(component);
+    }
 
-        let final_base = if base_path.as_os_str().is_empty() {
-            PathBuf::from(".")
-        } else {
-            base_path
-        };
+    if watch_path.as_os_str().is_empty() {
+        watch_path = PathBuf::from(".");
+    }
 
-        let watch_path = std::fs::canonicalize(&final_base).unwrap_or(final_base);
-        let pattern = glob::Pattern::new(&path_str).context("Failed to parse glob pattern")?;
-
-        (watch_path, Some(pattern))
-    } else {
-        let watch_path = std::fs::canonicalize(&args.path).unwrap_or_else(|_| args.path.clone());
-        (watch_path, None)
-    };
+    let watch_path = std::fs::canonicalize(&watch_path).unwrap_or(watch_path);
 
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
