@@ -137,6 +137,8 @@
               cargo-release
               git-cliff
             ];
+
+            RUST_SRC_PATH = rustPlatform.rustLibSrc;
           };
       }
     );
