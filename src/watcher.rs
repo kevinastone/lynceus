@@ -6,27 +6,24 @@ use notify_debouncer_full::{FileIdMap, new_debouncer_opt};
 use std::path::PathBuf;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
-/// A debounced directory file watcher optimized for network shares.
-pub struct DirectoryWatcher {
-    // The debouncer must be kept alive to maintain the active filesystem watch
+/// A raw debounced directory watcher that yields relative paths of all created files.
+pub struct RawDirectoryWatcher {
     _debouncer: notify_debouncer_full::Debouncer<PollWatcher, FileIdMap>,
 }
 
-impl DirectoryWatcher {
-    /// Initializes the debounced poll watcher on `watch_path` and returns a stream
-    /// of relative file paths that have been created and matched against the optional glob pattern.
+impl RawDirectoryWatcher {
+    /// Starts watching `watch_path` and returns a stream of relative file paths for all created files.
     pub fn new(
         watch_path: PathBuf,
         interval: std::time::Duration,
         debounce: std::time::Duration,
-        pattern: Option<String>,
     ) -> anyhow::Result<(Self, impl Stream<Item = PathBuf>)> {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
-        // 1. Set up the polling configuration
+        // Set up the polling configuration
         let poll_config = Config::default().with_poll_interval(interval);
 
-        // 2. Initialize the full debouncer
+        // Initialize the full debouncer
         let debouncer = new_debouncer_opt::<_, PollWatcher, FileIdMap>(
             debounce,
             None,
@@ -38,7 +35,6 @@ impl DirectoryWatcher {
         )
         .context("Failed to create polling debouncer")?;
 
-        // 3. Add the path to the debouncer
         let mut watcher = Self {
             _debouncer: debouncer,
         };
@@ -57,17 +53,37 @@ impl DirectoryWatcher {
             .filter(|p| future::ready(p.is_file()))
             .filter_map(move |p| {
                 future::ready(p.strip_prefix(&watch_path).ok().map(|r| r.to_path_buf()))
-            })
-            .filter(move |relative_path| {
-                future::ready(match &pattern {
-                    Some(pat) => {
-                        let path_str = relative_path.to_string_lossy();
-                        glob_match(pat.as_bytes(), path_str.as_bytes())
-                    }
-                    None => true,
-                })
             });
 
         Ok((watcher, created_files_stream))
+    }
+}
+
+/// A debounced directory file watcher with optional glob pattern filtering.
+pub struct DirectoryWatcher {
+    _raw: RawDirectoryWatcher,
+}
+
+impl DirectoryWatcher {
+    /// Initializes the debounced poll watcher and applies glob filtering to the output stream.
+    pub fn new(
+        watch_path: PathBuf,
+        interval: std::time::Duration,
+        debounce: std::time::Duration,
+        pattern: Option<String>,
+    ) -> anyhow::Result<(Self, impl Stream<Item = PathBuf>)> {
+        let (raw, raw_stream) = RawDirectoryWatcher::new(watch_path, interval, debounce)?;
+
+        let filtered_stream = raw_stream.filter(move |relative_path| {
+            future::ready(match &pattern {
+                Some(pat) => {
+                    let path_str = relative_path.to_string_lossy();
+                    glob_match(pat.as_bytes(), path_str.as_bytes())
+                }
+                None => true,
+            })
+        });
+
+        Ok((Self { _raw: raw }, filtered_stream))
     }
 }
