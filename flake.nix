@@ -134,6 +134,7 @@
             packages = [
               skopeo
               cargo-outdated
+              cargo-release
             ];
           };
       }
