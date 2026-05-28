@@ -90,6 +90,7 @@ dependencies = [
  "reqwest-middleware",
  "reqwest-retry",
  "reqwest-tracing",
+ "serde",
  "serde_json",
  "tokio",
  "tokio-stream",

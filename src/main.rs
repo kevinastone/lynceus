@@ -10,6 +10,9 @@ use stability::{FileStabilizer, StabilityConfig};
 mod watcher;
 use watcher::DirectoryWatcher;
 
+mod events;
+use events::Event;
+
 mod webhook;
 use webhook::WebhookClient;
 
@@ -91,7 +94,8 @@ async fn main() -> anyhow::Result<()> {
                     Ok(rel_path) => {
                         tracing::info!(path = ?rel_path, "File created");
                         if let Some(client) = webhook_client.as_ref() {
-                            client.send_notification(&rel_path);
+                            let event = Event::file_created(rel_path);
+                            client.send_notification(event);
                         }
                     }
                     Err(rel_path) => {
