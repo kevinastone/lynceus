@@ -129,20 +129,12 @@
         formatter = treefmtStack.config.build.wrapper;
         devShells.default =
           with pkgs;
-          mkShell {
-            nativeBuildInputs = [
-              rustc
-              cargo
-              rustfmt
-              clippy
-            ]
-            ++ commonArgs.nativeBuildInputs;
-            inherit (commonArgs) buildInputs;
+          craneLib.devShell {
+            checks = self.checks.${system};
             packages = [
               skopeo
               cargo-outdated
             ];
-            RUST_SRC_PATH = rustPlatform.rustLibSrc;
           };
       }
     );
