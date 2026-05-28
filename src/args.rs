@@ -17,7 +17,7 @@ pub struct Args {
     #[arg(env = "ARGUS_WEBHOOK_URL")]
     pub webhook_url: Option<String>,
 
-    /// Optional JSON template for the webhook payload. Supports `{{path}}` and `{{event}}` placeholders.
+    /// Optional JSON template for the webhook payload. Supports `{{path}}`, `{{type}}`, and `{{timestamp}}` placeholders.
     #[arg(
         long,
         env = "ARGUS_WEBHOOK_TEMPLATE",

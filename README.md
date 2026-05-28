@@ -46,7 +46,7 @@ Options:
   -p, --pattern <PATTERN>
           Optional glob pattern relative to the watch path to filter created files (e.g. "**/*.txt") [env: ARGUS_PATTERN=]
       --webhook-template <WEBHOOK_TEMPLATE>
-          Optional JSON template for the webhook payload. Supports `{{path}}` and `{{event}}` placeholders [env: ARGUS_WEBHOOK_TEMPLATE=] [default: {"event":"{{event}}","path":"{{path}}"}]
+          Optional JSON template for the webhook payload. Supports `{{path}}`, `{{type}}`, and `{{timestamp}}` placeholders [env: ARGUS_WEBHOOK_TEMPLATE=] [default: {"type":"{{type}}","timestamp":"{{timestamp}}","path":"{{path}}"}]
       --webhook-retries <WEBHOOK_RETRIES>
           Number of retries when sending a webhook fails [env: ARGUS_WEBHOOK_RETRIES=] [default: 3]
   -i, --interval <INTERVAL>
@@ -91,7 +91,8 @@ Using the `--webhook-template` flag (or `ARGUS_WEBHOOK_TEMPLATE` env var), you c
 
 * **Placeholders**:
   * `{{path}}`: Relative path of the created file.
-  * `{{event}}`: Event name (defaults to `"file_created"`).
+  * `{{type}}`: Event type (e.g. `"file.created"`).
+  * `{{timestamp}}`: Event timestamp in RFC 3339 format (e.g. `"2026-05-28T15:02:50Z"`).
 * **Liquid Filters**: Extract filenames or transform text using filters (e.g., `{{path | split: '/' | last}}` extracts only the filename).
 
 **Example (Slack-compatible webhook message)**:
@@ -112,8 +113,8 @@ Argus supports the standard `RUST_LOG` environment variable to configure logging
 ### Standard Info logs (Default)
 ```bash
 $ cargo run -- /path/to/watch
-2026-05-27T08:00:00Z  INFO argus: Starting Argus args=Args { path: "/path/to/watch", pattern: None, webhook_url: None, webhook_template: Object {"event": String("{{event}}"), "path": String("{{path}}")}, webhook_retries: 3, interval: 2s, debounce: 5s, cooldown: 10s, stable_count: 3, error_count: 5 }
-2026-05-27T08:00:00Z  INFO argus: Watching for new files target_path="/path/to/watch"
+2026-05-27T08:00:00Z  INFO argus: Starting Argus args=Args { path: "/path/to/watch", pattern: None, webhook_url: None, webhook_template: Object {"path": String("{{path}}"), "timestamp": String("{{timestamp}}"), "type": String("{{type}}")}, webhook_retries: 3, interval: Duration(2s), debounce: Duration(5s), cooldown: Duration(10s), stable_count: 3, error_count: 5 }
+2026-05-27T08:00:00Z  INFO argus: Watching for new files watch_path="/path/to/watch"
 2026-05-27T08:00:35Z  INFO argus: File created path="video.mp4"
 ```
 
