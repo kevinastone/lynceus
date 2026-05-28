@@ -135,6 +135,7 @@
               skopeo
               cargo-outdated
               cargo-release
+              git-cliff
             ];
           };
       }
