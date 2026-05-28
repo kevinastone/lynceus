@@ -9,6 +9,7 @@
 
   outputs =
     {
+      self,
       nixpkgs,
       utils,
       treefmt-nix,
@@ -57,7 +58,7 @@
           }
         );
       in
-      {
+      rec {
         packages = rec {
           inherit argus;
           bin = argus;
@@ -118,6 +119,11 @@
             };
 
           inherit (pkgs) skopeo;
+        };
+
+        checks = {
+          inherit (packages) check clippy test;
+          formatting = treefmtStack.config.build.check self;
         };
 
         formatter = treefmtStack.config.build.wrapper;
