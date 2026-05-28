@@ -20,7 +20,7 @@
       system:
       let
         pkgs = import nixpkgs { inherit system; };
-        cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
+        cargoToml = fromTOML (builtins.readFile ./Cargo.toml);
         craneLib = crane.mkLib pkgs;
         treefmtStack = treefmt-nix.lib.evalModule pkgs {
           projectRootFile = "flake.nix";
