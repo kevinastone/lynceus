@@ -138,7 +138,14 @@
               git-cliff
             ];
 
-            RUST_SRC_PATH = rustPlatform.rustLibSrc;
+            # Extract the Rust standard library source dynamically from craneLib's toolchain
+            RUST_SRC_PATH = craneLib.callPackage (
+              { rustc, rustPlatform }:
+              if builtins.pathExists "${rustc}/lib/rustlib/src/rust/library" then
+                "${rustc}/lib/rustlib/src/rust/library"
+              else
+                rustPlatform.rustLibSrc
+            ) { };
           };
       }
     );
