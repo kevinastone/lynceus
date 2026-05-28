@@ -175,68 +175,111 @@ mod tests {
         format!("{:x}", hasher.finish())
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn test_stabilizer_immediate_stable() {
         let temp = TempDir::new("immediate");
         let file_path = temp.path.join("file.txt");
         fs::write(&file_path, b"hello").unwrap();
 
+        let cooldown = Duration::from_secs(10);
         let config = StabilityConfig {
-            cooldown: Duration::from_millis(5),
+            cooldown,
             stable_limit: NonZeroUsize::new(2).unwrap(),
             error_limit: NonZeroUsize::new(3).unwrap(),
         };
         let stabilizer = FileStabilizer::new(temp.path.clone(), config);
 
-        let res = stabilizer.wait(PathBuf::from("file.txt")).await;
+        let handle = tokio::spawn(async move { stabilizer.wait(PathBuf::from("file.txt")).await });
+
+        // Let the stabilizer execute the first metadata check, then yield on the sleep.
+        tokio::task::yield_now().await;
+
+        // First tick: advance by cooldown (stable_count becomes 1)
+        tokio::time::advance(cooldown).await;
+        tokio::task::yield_now().await;
+
+        // Second tick: advance by cooldown (stable_count becomes 2 -> stable limit met)
+        tokio::time::advance(cooldown).await;
+
+        let res = handle.await.unwrap();
         assert_eq!(res, Ok(PathBuf::from("file.txt")));
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn test_stabilizer_error_limit_reached() {
         let temp = TempDir::new("error_limit");
 
+        let cooldown = Duration::from_secs(10);
         let config = StabilityConfig {
-            cooldown: Duration::from_millis(5),
+            cooldown,
             stable_limit: NonZeroUsize::new(2).unwrap(),
             error_limit: NonZeroUsize::new(3).unwrap(),
         };
         let stabilizer = FileStabilizer::new(temp.path.clone(), config);
 
-        // file.txt does not exist
-        let res = stabilizer.wait(PathBuf::from("file.txt")).await;
+        let handle = tokio::spawn(async move { stabilizer.wait(PathBuf::from("file.txt")).await });
+
+        // Let the first error tick happen (error_count becomes 1).
+        tokio::task::yield_now().await;
+
+        // Second tick: advance by cooldown (error_count becomes 2).
+        tokio::time::advance(cooldown).await;
+        tokio::task::yield_now().await;
+
+        // Third tick: advance by cooldown (error_count becomes 3 -> limit reached).
+        tokio::time::advance(cooldown).await;
+
+        let res = handle.await.unwrap();
         assert_eq!(res, Err(PathBuf::from("file.txt")));
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn test_stabilizer_detects_changes() {
         let temp = TempDir::new("growing");
         let file_path = temp.path.join("file.txt");
-        fs::write(&file_path, b"a").unwrap();
+        fs::write(&file_path, b"a").unwrap(); // Size 1
 
+        let cooldown = Duration::from_secs(10);
         let config = StabilityConfig {
-            cooldown: Duration::from_millis(50),
+            cooldown,
             stable_limit: NonZeroUsize::new(3).unwrap(),
             error_limit: NonZeroUsize::new(3).unwrap(),
         };
         let stabilizer = FileStabilizer::new(temp.path.clone(), config);
 
-        // Spawn a task that updates the file size during the cooldown checks
-        let file_path_clone = file_path.clone();
-        let writer_handle = tokio::spawn(async move {
-            // First stable tick (50ms) is at size 1
-            tokio::time::sleep(Duration::from_millis(30)).await;
-            // Write again, changing size -> resets stable_count
-            fs::write(&file_path_clone, b"ab").unwrap();
+        let handle = tokio::spawn(async move { stabilizer.wait(PathBuf::from("file.txt")).await });
 
-            tokio::time::sleep(Duration::from_millis(60)).await;
-            // Write again, changing size -> resets stable_count again
-            fs::write(&file_path_clone, b"abc").unwrap();
-        });
+        // Let the first metadata check happen (size 1, stable_count = 0)
+        tokio::task::yield_now().await;
 
-        let res = stabilizer.wait(PathBuf::from("file.txt")).await;
+        // Modify the file to size 2 while the loop is sleeping
+        fs::write(&file_path, b"ab").unwrap();
+        // Advance time to wake up the sleep
+        tokio::time::advance(cooldown).await;
+        // Let it run Loop 2 (size 2, stable_count reset to 0)
+        tokio::task::yield_now().await;
+
+        // Modify the file to size 3 while the loop is sleeping
+        fs::write(&file_path, b"abc").unwrap();
+        // Advance time to wake up the sleep
+        tokio::time::advance(cooldown).await;
+        // Let it run Loop 3 (size 3, stable_count reset to 0)
+        tokio::task::yield_now().await;
+
+        // Now stop modifying and let it stabilize (stable_limit = 3)
+        // Advance for Loop 4 (stable_count = 1)
+        tokio::time::advance(cooldown).await;
+        tokio::task::yield_now().await;
+
+        // Advance for Loop 5 (stable_count = 2)
+        tokio::time::advance(cooldown).await;
+        tokio::task::yield_now().await;
+
+        // Advance for Loop 6 (stable_count = 3 -> stable!)
+        tokio::time::advance(cooldown).await;
+
+        let res = handle.await.unwrap();
         assert_eq!(res, Ok(PathBuf::from("file.txt")));
-        writer_handle.await.unwrap();
 
         // Check the final file size
         let metadata = fs::metadata(&file_path).unwrap();
