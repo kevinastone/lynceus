@@ -1,9 +1,9 @@
 use anyhow::Context;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
-use std::path::Path;
-use std::time::SystemTime;
 use tokio_util::task::TaskTracker;
+
+use crate::events::Event;
 
 #[derive(Clone)]
 pub struct WebhookClient {
@@ -38,19 +38,15 @@ impl WebhookClient {
     }
 
     /// Dispatches a non-blocking webhook POST notification about a created file.
-    pub fn send_notification(&self, relative_path: &Path) {
+    pub fn send_notification(&self, event: Event) {
         let client = self.client.clone();
         let url = self.url.clone();
         let tmpl = self.template.clone();
-        let path_str = relative_path.to_string_lossy().into_owned();
 
         self.tracker.spawn(async move {
             let res = async {
-                let data = serde_json::json!({
-                    "type": "file.created",
-                    "timestamp": humantime::format_rfc3339(SystemTime::now()).to_string(),
-                    "path": path_str,
-                });
+                let data = serde_json::to_value(&event)
+                    .map_err(|e| anyhow::anyhow!("Failed to serialize event: {}", e))?;
                 let payload = tmpl
                     .render(&data)
                     .map_err(|e| anyhow::anyhow!("Failed to render liquid template: {}", e))?;
@@ -73,7 +69,7 @@ impl WebhookClient {
             match res {
                 Ok(_) => {
                     tracing::info!(
-                        path = %path_str,
+                        ?event,
                         url = %url,
                         "Webhook notification sent successfully"
                     );
@@ -81,7 +77,7 @@ impl WebhookClient {
                 Err(e) => {
                     tracing::error!(
                         error = ?e,
-                        path = %path_str,
+                        ?event,
                         url = %url,
                         "Failed to send webhook notification"
                     );
@@ -163,7 +159,7 @@ mod tests {
             tracker.clone(),
         );
 
-        client.send_notification(Path::new("test.txt"));
+        client.send_notification(Event::file_created(Path::new("test.txt").to_path_buf()));
 
         // Wait for webhook to finish
         tracker.close();
@@ -209,7 +205,7 @@ mod tests {
             tracker.clone(),
         );
 
-        client.send_notification(Path::new("test.txt"));
+        client.send_notification(Event::file_created(Path::new("test.txt").to_path_buf()));
 
         tracker.close();
         let finished = tokio::select! {
@@ -243,7 +239,7 @@ mod tests {
             tracker.clone(),
         );
 
-        client.send_notification(Path::new("test.txt"));
+        client.send_notification(Event::file_created(Path::new("test.txt").to_path_buf()));
 
         tracker.close();
         let finished = tokio::select! {
