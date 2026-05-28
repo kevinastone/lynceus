@@ -36,11 +36,15 @@ enum EventPayload {
 }
 
 impl Event {
-    pub fn file_created(path: PathBuf) -> Self {
+    fn new(payload: EventPayload) -> Self {
         Self {
             timestamp: SystemTime::now(),
-            payload: EventPayload::FileCreated { path },
+            payload,
         }
+    }
+
+    pub fn file_created(path: PathBuf) -> Self {
+        Self::new(EventPayload::FileCreated { path })
     }
 
     #[cfg(test)]
