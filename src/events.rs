@@ -2,7 +2,7 @@ use serde::Serialize;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
-fn serialize_path_lossy<S>(path: &PathBuf, serializer: S) -> Result<S::Ok, S::Error>
+fn serialize_path_lossy<S>(path: &std::path::Path, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
 {
