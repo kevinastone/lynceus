@@ -135,8 +135,8 @@ impl FileStabilizer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_helpers::TempDir;
     use std::fs;
-    use std::time::SystemTime;
 
     #[test]
     fn test_humanize_bytes_formatting() {
@@ -146,33 +146,6 @@ mod tests {
         assert_eq!(humanize_bytes(1024 * 1024), "1.00 MiB");
         assert_eq!(humanize_bytes(1024 * 1024 * 1024), "1.00 GiB");
         assert_eq!(humanize_bytes(1024 * 1024 * 1024 * 1024), "1.00 TiB");
-    }
-
-    struct TempDir {
-        path: PathBuf,
-    }
-
-    impl TempDir {
-        fn new(name: &str) -> Self {
-            let mut path = std::env::temp_dir();
-            path.push(format!("argus_test_{}_{}", name, uuid_hex()));
-            fs::create_dir_all(&path).unwrap();
-            Self { path }
-        }
-    }
-
-    impl Drop for TempDir {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.path);
-        }
-    }
-
-    fn uuid_hex() -> String {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-        let mut hasher = DefaultHasher::new();
-        SystemTime::now().hash(&mut hasher);
-        format!("{:x}", hasher.finish())
     }
 
     #[tokio::test(start_paused = true)]

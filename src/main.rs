@@ -13,6 +13,9 @@ use watcher::DirectoryWatcher;
 mod webhook;
 use webhook::WebhookClient;
 
+#[cfg(test)]
+mod test_helpers;
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Initialize tracing subscriber with level info by default
