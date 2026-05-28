@@ -1,13 +1,13 @@
 # Developer & AI Agent Guidelines (AGENTS.md)
 
-Welcome! If you are an AI coding assistant (like Antigravity) or a developer onboarding to this repository, please read these instructions to understand the code architecture, tooling, and coding standards of Argus.
+Welcome! If you are an AI coding assistant (like Antigravity) or a developer onboarding to this repository, please read these instructions to understand the code architecture, tooling, and coding standards of Lynceus.
 
 ---
 
 ## 🛠️ Tooling & Commands
 
 ### 1. Code Formatting
-Argus is fully Nix-integrated. To format the entire codebase (including Rust files via `rustfmt`), always run the following command:
+Lynceus is fully Nix-integrated. To format the entire codebase (including Rust files via `rustfmt`), always run the following command:
 ```bash
 nix fmt
 ```

@@ -61,7 +61,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ghcr.io/kevinastone/argus
+          images: ghcr.io/kevinastone/lynceus
           context: git
 
       - name: Login to GHCR

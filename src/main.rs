@@ -30,7 +30,7 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let args = Args::parse();
-    tracing::info!(?args, "Starting Argus");
+    tracing::info!(?args, "Starting Lynceus");
     let absolute_path = if args.path.is_absolute() {
         args.path.clone()
     } else {

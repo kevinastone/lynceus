@@ -51,7 +51,7 @@
         cargoArtifacts = craneLib.buildDepsOnly commonArgs;
 
         # Build the final binary using cached dependency artifacts
-        argus = craneLib.buildPackage (
+        lynceus = craneLib.buildPackage (
           commonArgs
           // {
             inherit cargoArtifacts;
@@ -60,15 +60,15 @@
       in
       rec {
         packages = rec {
-          inherit argus;
-          bin = argus;
-          default = argus;
+          inherit lynceus;
+          bin = lynceus;
+          default = lynceus;
 
           check = craneLib.buildPackage (
             commonArgs
             // {
               inherit cargoArtifacts;
-              pname = "argus-check";
+              pname = "lynceus-check";
               cargoBuildCommand = "cargo check";
             }
           );
@@ -91,12 +91,12 @@
           image =
             with pkgs;
             dockerTools.buildImage {
-              name = "argus";
+              name = "lynceus";
               copyToRoot = buildEnv {
                 name = "image-root";
                 paths = [
                   cacert
-                  argus
+                  lynceus
                   bashInteractive
                   coreutils
                 ];
@@ -108,7 +108,7 @@
               config.Env = [
                 "SSL_CERT_FILE=${cacert}/etc/ssl/certs/ca-bundle.crt"
               ];
-              config.Entrypoint = [ "/bin/argus" ];
+              config.Entrypoint = [ "/bin/lynceus" ];
               config.Labels = with cargoToml; {
                 "org.opencontainers.image.title" = package.name;
                 "org.opencontainers.image.source" = package.repository or "";

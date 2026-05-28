@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.3.0](https://github.com/kevinastone/argus/compare/v0.2.0...v0.3.0) - 2026-05-28
+## [0.3.0](https://github.com/kevinastone/lynceus/compare/v0.2.0...v0.3.0) - 2026-05-28
 
 ### Added
 
@@ -57,7 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Override naersk fetchurl to inject a compliant User-Agent
 - Add comment explaining customFetchurl for crates.io 403s
 - Use space-free User-Agent in curlOpts to avoid bash word splitting
-- Include argus in image copyToRoot to fix missing shared libraries
+- Include lynceus in image copyToRoot to fix missing shared libraries
 - Explicitly add openssl and set LD_LIBRARY_PATH in container to fix runtime library resolution
 - Add coreutils to container image to provide standard shell commands
 - Explicitly set pathsToLink in buildEnv to link /bin and /etc

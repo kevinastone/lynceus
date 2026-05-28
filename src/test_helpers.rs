@@ -11,7 +11,7 @@ impl TempDir {
     /// Creates a new temporary directory with a randomized prefix.
     pub fn new(name: &str) -> Self {
         let mut path = std::env::temp_dir();
-        path.push(format!("argus_test_{}_{}", name, uuid_hex()));
+        path.push(format!("lynceus_test_{}_{}", name, uuid_hex()));
         fs::create_dir_all(&path).unwrap();
         Self { path }
     }

@@ -6,35 +6,35 @@ use std::time::Duration;
 #[command(author, version, about, long_about = None)]
 pub struct Args {
     /// Path to watch for changes
-    #[arg(env = "ARGUS_PATH")]
+    #[arg(env = "LYNCEUS_PATH")]
     pub path: std::path::PathBuf,
 
     /// Optional glob pattern relative to the watch path to filter created files (e.g. "**/*.txt")
-    #[arg(short, long, env = "ARGUS_PATTERN")]
+    #[arg(short, long, env = "LYNCEUS_PATTERN")]
     pub pattern: Option<String>,
 
     /// Optional webhook URL to post a message to when a file is created
-    #[arg(env = "ARGUS_WEBHOOK_URL")]
+    #[arg(env = "LYNCEUS_WEBHOOK_URL")]
     pub webhook_url: Option<String>,
 
     /// Optional JSON template for the webhook payload. Supports `{{path}}`, `{{type}}`, and `{{timestamp}}` placeholders.
     #[arg(
         long,
-        env = "ARGUS_WEBHOOK_TEMPLATE",
+        env = "LYNCEUS_WEBHOOK_TEMPLATE",
         value_parser = parse_json,
         default_value = r#"{"type":"{{type}}","timestamp":"{{timestamp}}","path":"{{path}}"}"#
     )]
     pub webhook_template: serde_json::Value,
 
     /// Number of retries when sending a webhook fails
-    #[arg(long, env = "ARGUS_WEBHOOK_RETRIES", default_value_t = 3)]
+    #[arg(long, env = "LYNCEUS_WEBHOOK_RETRIES", default_value_t = 3)]
     pub webhook_retries: usize,
 
     /// Polling interval (e.g. 2s, 500ms)
     #[arg(
         short,
         long,
-        env = "ARGUS_INTERVAL",
+        env = "LYNCEUS_INTERVAL",
         default_value_t = humantime::Duration::from(Duration::from_secs(2))
     )]
     pub interval: humantime::Duration,
@@ -43,7 +43,7 @@ pub struct Args {
     #[arg(
         short,
         long,
-        env = "ARGUS_DEBOUNCE",
+        env = "LYNCEUS_DEBOUNCE",
         default_value_t = humantime::Duration::from(Duration::from_secs(5))
     )]
     pub debounce: humantime::Duration,
@@ -52,7 +52,7 @@ pub struct Args {
     #[arg(
         short,
         long,
-        env = "ARGUS_COOLDOWN",
+        env = "LYNCEUS_COOLDOWN",
         default_value_t = humantime::Duration::from(StabilityConfig::default().cooldown)
     )]
     pub cooldown: humantime::Duration,
@@ -61,7 +61,7 @@ pub struct Args {
     #[arg(
         short,
         long,
-        env = "ARGUS_STABLE_COUNT",
+        env = "LYNCEUS_STABLE_COUNT",
         default_value_t = StabilityConfig::DEFAULT_STABLE_LIMIT
     )]
     pub stable_count: std::num::NonZeroUsize,
@@ -70,7 +70,7 @@ pub struct Args {
     #[arg(
         short,
         long,
-        env = "ARGUS_ERROR_COUNT",
+        env = "LYNCEUS_ERROR_COUNT",
         default_value_t = StabilityConfig::DEFAULT_ERROR_LIMIT
     )]
     pub error_count: std::num::NonZeroUsize,
