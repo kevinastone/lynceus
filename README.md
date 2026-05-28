@@ -8,8 +8,10 @@ Argus tracks newly created files and ensures that writing/copying processes have
 
 - **Network-Share Optimized**: Uses poll-based directory watching with content hashing/comparison to guarantee event capture across network mounts.
 - **Concurrent Cooldown Checks**: Multiplexes up to 100 concurrent stability checks using an extremely lightweight Tokio async stream architecture. It automatically waits for large files to finish copying without blocking other detections.
-- **Fully Configurable**: Tweak polling intervals, debounce duration, and tick rates dynamically using standard CLI flags.
-- **Structured Diagnostics**: Utilizes the `tracing` ecosystem for rich, structured stdout logging and easily configurable verbosity.
+- **Glob Pattern Filtering**: Filter detected files by standard glob patterns (e.g. `**/*.mp4`).
+- **Flexible Webhook Customization**: Define custom JSON payloads utilizing the rich **Liquid template engine** syntax (supporting filters like `upcase`, `split`, and `last`).
+- **Resilient Delivery**: Dispatches webhook notifications asynchronously and automatically retries transient failures with **exponential backoff**.
+- **Fully Nix-Integrated**: Minimal OCI container images, formatting via `nix fmt` (using `treefmt`), and comprehensive CI checking.
 
 ---
 
@@ -41,37 +43,65 @@ Arguments:
   [WEBHOOK_URL]  Optional webhook URL to post a message to when a file is created [env: ARGUS_WEBHOOK_URL=]
 
 Options:
-  -p, --poll <POLL>                  Polling interval (e.g. 2s, 500ms) [env: ARGUS_POLL=] [default: 2s]
-  -d, --debounce <DEBOUNCE>          Debounce duration (e.g. 5s, 10s) [env: ARGUS_DEBOUNCE=] [default: 5s]
-  -c, --cooldown <COOLDOWN>          Cooldown interval for checking file stability (e.g. 10s, 30s) [env: ARGUS_COOLDOWN=] [default: 10s]
-  -s, --stable-count <STABLE_COUNT>  Number of consecutive stable checks required to consider the file created [env: ARGUS_STABLE_COUNT=] [default: 3]
-  -e, --error-count <ERROR_COUNT>    Number of consecutive error checks before timing out/giving up on the file [env: ARGUS_ERROR_COUNT=] [default: 5]
-  -h, --help                         Print help
-  -V, --version                      Print version
+  -p, --pattern <PATTERN>
+          Optional glob pattern relative to the watch path to filter created files (e.g. "**/*.txt") [env: ARGUS_PATTERN=]
+      --webhook-template <WEBHOOK_TEMPLATE>
+          Optional JSON template for the webhook payload. Supports `{{path}}` and `{{event}}` placeholders [env: ARGUS_WEBHOOK_TEMPLATE=] [default: {"event":"{{event}}","path":"{{path}}"}]
+      --webhook-retries <WEBHOOK_RETRIES>
+          Number of retries when sending a webhook fails [env: ARGUS_WEBHOOK_RETRIES=] [default: 3]
+  -i, --interval <INTERVAL>
+          Polling interval (e.g. 2s, 500ms) [env: ARGUS_INTERVAL=] [default: 2s]
+  -d, --debounce <DEBOUNCE>
+          Debounce duration (e.g. 5s, 10s) [env: ARGUS_DEBOUNCE=] [default: 5s]
+  -c, --cooldown <COOLDOWN>
+          Cooldown interval for checking file stability (e.g. 10s, 30s) [env: ARGUS_COOLDOWN=] [default: 10s]
+  -s, --stable-count <STABLE_COUNT>
+          Number of consecutive stable checks required to consider the file created [env: ARGUS_STABLE_COUNT=] [default: 3]
+  -e, --error-count <ERROR_COUNT>
+          Number of consecutive error checks before timing out/giving up on the file [env: ARGUS_ERROR_COUNT=] [default: 5]
+  -h, --help
+          Print help
+  -V, --version
+          Print version
 ```
 
-### Robust Network Copy Detection (Example)
+---
 
-For network copies (e.g. copying huge media files over an SMB share), we want a long stability cooldown. You can run Argus to poll every 5 seconds, debounce events for 15 seconds, and check file stability every 10 seconds:
+## Examples & Common Configurations
+
+### 1. Glob Pattern Filtering
+If you only care about specific files (e.g., media files), you can filter incoming events using glob syntax:
 
 ```bash
-cargo run --release -- /path/to/watch --poll 5s --debounce 15s --cooldown 10s
+cargo run --release -- /path/to/watch --pattern "**/*.{mp4,mkv}"
 ```
 
-### Webhook Notifications (Optional)
+### 2. Robust Network Copy Detection
+For network copies (e.g. copying huge files over a slow SMB share), we want a longer stability cooldown. You can run Argus to poll every 5 seconds, debounce events for 15 seconds, and check file stability every 10 seconds:
 
-You can specify an optional Discord/Slack or generic HTTP endpoint webhook URL. When a file is fully created and stable, Argus posts a non-blocking JSON payload containing:
-```json
-{
-  "event": "file_created",
-  "path": "video.mp4"
-}
-```
-
-Example:
 ```bash
-cargo run --release -- /path/to/watch https://example.com/webhook
+cargo run --release -- /path/to/watch --interval 5s --debounce 15s --cooldown 10s
 ```
+
+### 3. Customizable Webhook Notifications
+You can specify an optional Discord/Slack or generic HTTP endpoint webhook. Webhooks are dispatched in the background and do not block the primary watcher loop.
+
+#### Liquid-syntax Template Engine
+Using the `--webhook-template` flag (or `ARGUS_WEBHOOK_TEMPLATE` env var), you can customize the JSON payload. Argus supports standard Liquid tags and filters.
+
+* **Placeholders**:
+  * `{{path}}`: Relative path of the created file.
+  * `{{event}}`: Event name (defaults to `"file_created"`).
+* **Liquid Filters**: Extract filenames or transform text using filters (e.g., `{{path | split: '/' | last}}` extracts only the filename).
+
+**Example (Slack-compatible webhook message)**:
+```bash
+cargo run --release -- /path/to/watch https://hooks.slack.com/services/... \
+  --webhook-template '{"text": "New file created: {{path | split: '\''/'\'' | last}} at {{path}}"}'
+```
+
+#### Transient Failure Retries
+Transient network or server errors are automatically retried using an exponential backoff policy (defaults to 3 retries) before declaring failure.
 
 ---
 
@@ -82,9 +112,8 @@ Argus supports the standard `RUST_LOG` environment variable to configure logging
 ### Standard Info logs (Default)
 ```bash
 $ cargo run -- /path/to/watch
-2026-05-27T08:00:00Z  INFO argus: Starting Argus args=Args { path: "/path/to/watch", poll: 2s, debounce: 5s, cooldown: 10s, stable_count: 3, error_count: 5 }
+2026-05-27T08:00:00Z  INFO argus: Starting Argus args=Args { path: "/path/to/watch", pattern: None, webhook_url: None, webhook_template: Object {"event": String("{{event}}"), "path": String("{{path}}")}, webhook_retries: 3, interval: 2s, debounce: 5s, cooldown: 10s, stable_count: 3, error_count: 5 }
 2026-05-27T08:00:00Z  INFO argus: Watching for new files target_path="/path/to/watch"
-2026-05-27T08:00:05Z  INFO argus: New file detected, waiting for write to complete path="video.mp4"
 2026-05-27T08:00:35Z  INFO argus: File created path="video.mp4"
 ```
 
@@ -92,7 +121,7 @@ $ cargo run -- /path/to/watch
 To see real-time stability polling ticks:
 ```bash
 $ RUST_LOG=debug cargo run -- /path/to/watch
-2026-05-27T08:00:05Z DEBUG argus: File size or modification time changed, resetting stable count path="video.mp4" old_size=None new_size="10.00 MiB"
+2026-05-27T08:00:05Z DEBUG argus: New file detected, waiting for write to complete path="video.mp4"
 2026-05-27T08:00:15Z DEBUG argus: File is stable path="video.mp4" size="10.00 MiB" stable_count=1
 2026-05-27T08:00:25Z DEBUG argus: File is stable path="video.mp4" size="10.00 MiB" stable_count=2
 2026-05-27T08:00:35Z DEBUG argus: File is stable path="video.mp4" size="10.00 MiB" stable_count=3
@@ -101,15 +130,19 @@ $ RUST_LOG=debug cargo run -- /path/to/watch
 
 ---
 
-## CI/CD Workflows
+## CI/CD & Development
 
-Argus is configured with modern GitHub Actions workflows for continuous integration and automated container delivery:
+Argus leverages **Nix** for fully reproducible formatting, builds, and sandbox checks:
 
-1. **Test Suite (`test.yaml`)**:
-   - Triggered on all `push` and `pull_request` events.
-   - Builds the binary, runs a strict `clippy` analysis (`-D warnings`), and executes all unit/integration tests across both `stable` and `beta` Rust toolchains.
-
-2. **Container Delivery (`container_image.yaml`)**:
-   - Triggered automatically upon a successful `Test` run on the `main` branch.
-   - Leverages **Nix** (`nix build .#image`) for high-performance, reproducible, minimal, and fully-declarative Docker/OCI image construction.
-   - Pushes the resulting container image securely to the GitHub Container Registry (GHCR) at `ghcr.io/kevinastone/argus` using **Skopeo**.
+- **Format Code**: Formats Rust (via `rustfmt`) and Nix code globally.
+  ```bash
+  nix fmt
+  ```
+- **Flake Checks**: Validates formatting (treefmt), cargo check, clippy analysis (`--deny warnings`), and the cargo test suite in a hermetic environment.
+  ```bash
+  nix flake check
+  ```
+- **Minimal OCI Container**: Builds a minimal, highly secure OCI/Docker container.
+  ```bash
+  nix build .#image
+  ```
