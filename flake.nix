@@ -20,6 +20,7 @@
       system:
       let
         pkgs = import nixpkgs { inherit system; };
+        cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
         craneLib = crane.mkLib pkgs;
         treefmtStack = treefmt-nix.lib.evalModule pkgs {
           projectRootFile = "flake.nix";
@@ -110,12 +111,10 @@
                 "SSL_CERT_FILE=${cacert}/etc/ssl/certs/ca-bundle.crt"
               ];
               config.Entrypoint = [ "/bin/argus" ];
-              config.Labels = {
-                "org.opencontainers.image.title" = "argus";
-                "org.opencontainers.image.source" = "https://github.com/kevinastone/argus";
-                "org.opencontainers.image.description" = ''
-                  argus is a file watcher that reports file changes using a webhook.
-                '';
+              config.Labels = with cargoToml; {
+                "org.opencontainers.image.title" = package.name;
+                "org.opencontainers.image.source" = package.repository or "";
+                "org.opencontainers.image.description" = package.description or "";
               };
             };
 
