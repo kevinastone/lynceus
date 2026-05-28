@@ -1,3 +1,31 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.2.1](https://github.com/kevinastone/argus/compare/v0.2.0...v0.2.1) - 2026-05-28
+
+### Added
+
+- introduce modular Events type with shared timestamp and clean encapsulation
+
+### Fixed
+
+- *(events)* fix clippy ptr-arg warning in path serialization
+- *(flake)* Add missing rust src to the devShell
+- *(nix)* use fromTOML instead of builtins.fromTOML
+
+### Other
+
+- add release-plz configuration enabling git-only mode
+- use private Event::new to default timestamp initialization
+- *(webhooks)* Replace default webhook with webhook-standard payload
+- *(flake)* dynamically resolve RUST_SRC_PATH from craneLib
+- Update changelog to show v0.2.0 release
 ## [v0.2.0]
 
 ### 🚀 Features
