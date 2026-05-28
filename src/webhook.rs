@@ -2,6 +2,7 @@ use anyhow::Context;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
 use std::path::Path;
+use std::time::SystemTime;
 use tokio_util::task::TaskTracker;
 
 #[derive(Clone)]
@@ -46,8 +47,9 @@ impl WebhookClient {
         self.tracker.spawn(async move {
             let res = async {
                 let data = serde_json::json!({
+                    "type": "file.created",
+                    "timestamp": humantime::format_rfc3339(SystemTime::now()).to_string(),
                     "path": path_str,
-                    "event": "file_created"
                 });
                 let payload = tmpl
                     .render(&data)
@@ -98,11 +100,11 @@ mod tests {
     #[test]
     fn test_render_template() {
         let template = json!({
-            "event_upper": "{{event | upcase}}",
+            "event_upper": "{{type | upcase}}",
             "file_path": "{{path}}",
             "filename": "{{path | split: '/' | last}}",
             "nested": {
-                "key": "value_{{event}}"
+                "key": "value_{{type}}"
             },
             "array": ["{{path}}", 42, true, null]
         });
@@ -110,16 +112,16 @@ mod tests {
         let tmpl = liquid_json::LiquidJson::new(template.clone());
         let data = json!({
             "path": "dir/file.txt",
-            "event": "file_created"
+            "type": "file.created"
         });
         let rendered = tmpl.render(&data).unwrap();
 
         let expected = json!({
-            "event_upper": "FILE_CREATED",
+            "event_upper": "FILE.CREATED",
             "file_path": "dir/file.txt",
             "filename": "file.txt",
             "nested": {
-                "key": "value_file_created"
+                "key": "value_file.created"
             },
             "array": ["dir/file.txt", 42, true, null]
         });

@@ -22,7 +22,7 @@ pub struct Args {
         long,
         env = "ARGUS_WEBHOOK_TEMPLATE",
         value_parser = parse_json,
-        default_value = r#"{"event":"{{event}}","path":"{{path}}"}"#
+        default_value = r#"{"type":"{{type}}","timestamp":"{{timestamp}}","path":"{{path}}"}"#
     )]
     pub webhook_template: serde_json::Value,
 
