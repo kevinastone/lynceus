@@ -87,3 +87,108 @@ impl DirectoryWatcher {
         Ok((Self { _raw: raw }, filtered_stream))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::time::SystemTime;
+
+    struct TempDir {
+        path: PathBuf,
+    }
+
+    impl TempDir {
+        fn new(name: &str) -> Self {
+            let mut path = std::env::temp_dir();
+            path.push(format!("argus_watcher_test_{}_{}", name, uuid_hex()));
+            fs::create_dir_all(&path).unwrap();
+            Self { path }
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+
+    fn uuid_hex() -> String {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        SystemTime::now().hash(&mut hasher);
+        format!("{:x}", hasher.finish())
+    }
+
+    #[tokio::test]
+    async fn test_raw_directory_watcher() {
+        let temp = TempDir::new("raw");
+
+        let interval = std::time::Duration::from_millis(5);
+        let debounce = std::time::Duration::from_millis(10);
+
+        let (_watcher, mut stream) =
+            RawDirectoryWatcher::new(temp.path.clone(), interval, debounce).unwrap();
+
+        // Let the watcher initialize
+        tokio::time::sleep(std::time::Duration::from_millis(15)).await;
+
+        // Create a file
+        let file_path = temp.path.join("hello.txt");
+        fs::write(&file_path, b"hello").unwrap();
+
+        // Create a subdirectory (should be ignored by is_file check)
+        let dir_path = temp.path.join("subdir");
+        fs::create_dir(&dir_path).unwrap();
+
+        // Await the next event on the stream
+        let next_event =
+            tokio::time::timeout(std::time::Duration::from_millis(500), stream.next()).await;
+
+        assert!(next_event.is_ok(), "Timeout waiting for event");
+        let path = next_event.unwrap().expect("Stream terminated early");
+        assert_eq!(path, PathBuf::from("hello.txt"));
+    }
+
+    #[tokio::test]
+    async fn test_directory_watcher_with_pattern() {
+        let temp = TempDir::new("pattern");
+
+        let interval = std::time::Duration::from_millis(5);
+        let debounce = std::time::Duration::from_millis(10);
+
+        let (_watcher, mut stream) = DirectoryWatcher::new(
+            temp.path.clone(),
+            interval,
+            debounce,
+            Some("*.txt".to_string()),
+        )
+        .unwrap();
+
+        // Let the watcher initialize
+        tokio::time::sleep(std::time::Duration::from_millis(15)).await;
+
+        // Create a file matching the pattern
+        let txt_path = temp.path.join("match.txt");
+        fs::write(&txt_path, b"match").unwrap();
+
+        // Create a file not matching the pattern
+        let log_path = temp.path.join("ignored.log");
+        fs::write(&log_path, b"ignored").unwrap();
+
+        // Await the next event on the stream (should be match.txt)
+        let next_event =
+            tokio::time::timeout(std::time::Duration::from_millis(500), stream.next()).await;
+
+        assert!(next_event.is_ok(), "Timeout waiting for event");
+        let path = next_event.unwrap().expect("Stream terminated early");
+        assert_eq!(path, PathBuf::from("match.txt"));
+
+        // There should be no more events for ignored.log.
+        // Let's wait a short bit to confirm.
+        let quiet =
+            tokio::time::timeout(std::time::Duration::from_millis(100), stream.next()).await;
+        assert!(quiet.is_err(), "Should not have received log file event");
+    }
+}
