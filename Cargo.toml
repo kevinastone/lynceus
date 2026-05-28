@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 description = "argus is a file watcher that reports file changes using a webhook."
 repository = "https://github.com/kevinastone/argus"
+publish = false
 
 [dependencies]
 anyhow = "1.0.93"
