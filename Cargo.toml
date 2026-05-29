@@ -1,6 +1,6 @@
 [package]
 name = "lynceus"
-version = "0.4.2"
+version = "0.4.3"
 license = "MIT"
 edition = "2024"
 description = "lynceus is a file watcher that reports file changes using a webhook."
