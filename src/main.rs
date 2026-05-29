@@ -30,43 +30,44 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let args = Args::parse();
-    tracing::info!(?args, "Starting Lynceus");
-    let absolute_path = if args.path.is_absolute() {
-        args.path.clone()
+    tracing::info!(%args, "Starting Lynceus");
+
+    let absolute_path = if args.watcher.path.is_absolute() {
+        args.watcher.path.clone()
     } else {
         std::env::current_dir()
-            .map(|cwd| cwd.join(&args.path))
-            .unwrap_or_else(|_| args.path.clone())
+            .map(|cwd| cwd.join(&args.watcher.path))
+            .unwrap_or_else(|_| args.watcher.path.clone())
     };
 
     let watch_path = std::fs::canonicalize(&absolute_path).unwrap_or(absolute_path);
 
     let (_watcher, created_files_stream) = DirectoryWatcher::new(
         watch_path.clone(),
-        *args.interval,
-        *args.debounce,
-        args.pattern.clone(),
+        *args.watcher.interval,
+        *args.watcher.debounce,
+        args.watcher.pattern.clone(),
     )?;
 
-    if let Some(ref pat) = args.pattern {
+    if let Some(ref pat) = args.watcher.pattern {
         tracing::info!(
-            ?watch_path,
+            path = %watch_path.display(),
             pattern = %pat,
             "Watching for new files matching pattern"
         );
     } else {
-        tracing::info!(?watch_path, "Watching for new files");
+        tracing::info!(path = %watch_path.display(), "Watching for new files");
     }
 
-    let stability_config = StabilityConfig::from(&args);
+    let stability_config = StabilityConfig::from(&args.stabilizer);
     let stabilizer = std::sync::Arc::new(FileStabilizer::new(watch_path, stability_config));
 
     let tracker = tokio_util::task::TaskTracker::new();
-    let webhook_client = args.webhook_url.map(|url| {
+    let webhook_client = args.webhook.webhook_url.map(|url| {
         WebhookClient::new(
             url,
-            args.webhook_template,
-            args.webhook_retries,
+            args.webhook.webhook_template,
+            args.webhook.webhook_retries,
             std::time::Duration::from_secs(10),
             tracker.clone(),
         )

@@ -1,4 +1,4 @@
-use crate::Args;
+use crate::args::StabilizerArgs;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -31,8 +31,8 @@ impl Default for StabilityConfig {
     }
 }
 
-impl From<&Args> for StabilityConfig {
-    fn from(args: &Args) -> Self {
+impl From<&StabilizerArgs> for StabilityConfig {
+    fn from(args: &StabilizerArgs) -> Self {
         Self {
             cooldown: *args.cooldown,
             stable_limit: args.stable_count,
