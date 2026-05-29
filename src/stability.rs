@@ -258,4 +258,17 @@ mod tests {
         let metadata = fs::metadata(&file_path).unwrap();
         assert_eq!(metadata.len(), 3);
     }
+
+    #[test]
+    fn test_stability_config_from_stabilizer_args() {
+        let args = StabilizerArgs {
+            cooldown: humantime::Duration::from(Duration::from_secs(15)),
+            stable_count: NonZeroUsize::new(4).unwrap(),
+            error_count: NonZeroUsize::new(6).unwrap(),
+        };
+        let config = StabilityConfig::from(&args);
+        assert_eq!(config.cooldown, Duration::from_secs(15));
+        assert_eq!(config.stable_limit, NonZeroUsize::new(4).unwrap());
+        assert_eq!(config.error_limit, NonZeroUsize::new(6).unwrap());
+    }
 }

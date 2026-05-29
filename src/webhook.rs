@@ -3,7 +3,41 @@ use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
 use tokio_util::task::TaskTracker;
 
+use crate::args::WebhookArgs;
 use crate::events::Event;
+
+#[derive(Clone, Debug)]
+pub struct WebhookClientConfig {
+    pub template: serde_json::Value,
+    pub retries: usize,
+    pub min_backoff: std::time::Duration,
+}
+
+impl WebhookClientConfig {
+    pub const DEFAULT_TEMPLATE: &'static str =
+        r#"{"type":"{{type}}","timestamp":"{{timestamp}}","path":"{{path}}"}"#;
+    pub const DEFAULT_RETRIES: usize = 3;
+}
+
+impl Default for WebhookClientConfig {
+    fn default() -> Self {
+        Self {
+            template: serde_json::from_str(Self::DEFAULT_TEMPLATE).unwrap(),
+            retries: Self::DEFAULT_RETRIES,
+            min_backoff: std::time::Duration::from_secs(10),
+        }
+    }
+}
+
+impl From<&WebhookArgs> for WebhookClientConfig {
+    fn from(args: &WebhookArgs) -> Self {
+        Self {
+            template: args.webhook_template.clone(),
+            retries: args.webhook_retries,
+            ..Self::default()
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct WebhookClient {
@@ -14,16 +48,10 @@ pub struct WebhookClient {
 }
 
 impl WebhookClient {
-    pub fn new(
-        url: String,
-        template: serde_json::Value,
-        retries: usize,
-        min_backoff: std::time::Duration,
-        tracker: TaskTracker,
-    ) -> Self {
+    pub fn new(url: String, config: WebhookClientConfig, tracker: TaskTracker) -> Self {
         let retry_policy = ExponentialBackoff::builder()
-            .retry_bounds(min_backoff, std::time::Duration::from_secs(300))
-            .build_with_max_retries(retries as u32);
+            .retry_bounds(config.min_backoff, std::time::Duration::from_secs(300))
+            .build_with_max_retries(config.retries as u32);
         let client = ClientBuilder::new(reqwest::Client::new())
             .with(reqwest_tracing::TracingMiddleware::default())
             .with(RetryTransientMiddleware::new_with_policy(retry_policy))
@@ -32,7 +60,7 @@ impl WebhookClient {
         Self {
             client,
             url,
-            template: liquid_json::LiquidJson::new(template),
+            template: liquid_json::LiquidJson::new(config.template),
             tracker,
         }
     }
@@ -153,9 +181,11 @@ mod tests {
         let tracker = TaskTracker::new();
         let client = WebhookClient::new(
             server.url(),
-            json!({"path": "{{path}}"}),
-            2, // 2 retries (up to 3 attempts)
-            std::time::Duration::from_millis(1),
+            WebhookClientConfig {
+                template: json!({"path": "{{path}}"}),
+                retries: 2,
+                min_backoff: std::time::Duration::from_millis(1),
+            },
             tracker.clone(),
         );
 
@@ -199,9 +229,11 @@ mod tests {
         let tracker = TaskTracker::new();
         let client = WebhookClient::new(
             server.url(),
-            json!({"path": "{{path}}"}),
-            1, // 1 retry (up to 2 attempts)
-            std::time::Duration::from_millis(1),
+            WebhookClientConfig {
+                template: json!({"path": "{{path}}"}),
+                retries: 1,
+                min_backoff: std::time::Duration::from_millis(1),
+            },
             tracker.clone(),
         );
 
@@ -233,9 +265,11 @@ mod tests {
         let tracker = TaskTracker::new();
         let client = WebhookClient::new(
             server.url(),
-            json!({"path": "{{path}}"}),
-            0, // 0 retries (exactly 1 attempt)
-            std::time::Duration::from_millis(1),
+            WebhookClientConfig {
+                template: json!({"path": "{{path}}"}),
+                retries: 0,
+                min_backoff: std::time::Duration::from_millis(1),
+            },
             tracker.clone(),
         );
 
@@ -250,5 +284,18 @@ mod tests {
         assert!(finished, "Webhook notification took too long to fail");
 
         mock_fail.assert_async().await;
+    }
+
+    #[test]
+    fn test_webhook_client_config_from_webhook_args() {
+        let args = WebhookArgs {
+            webhook_url: Some("http://example.com".to_string()),
+            webhook_template: json!({"my_path": "{{path}}"}),
+            webhook_retries: 5,
+        };
+        let config = WebhookClientConfig::from(&args);
+        assert_eq!(config.template, json!({"my_path": "{{path}}"}));
+        assert_eq!(config.retries, 5);
+        assert_eq!(config.min_backoff, std::time::Duration::from_secs(10));
     }
 }

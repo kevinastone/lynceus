@@ -14,7 +14,7 @@ mod events;
 use events::Event;
 
 mod webhook;
-use webhook::WebhookClient;
+use webhook::{WebhookClient, WebhookClientConfig};
 
 #[cfg(test)]
 mod test_helpers;
@@ -63,14 +63,9 @@ async fn main() -> anyhow::Result<()> {
     let stabilizer = std::sync::Arc::new(FileStabilizer::new(watch_path, stability_config));
 
     let tracker = tokio_util::task::TaskTracker::new();
-    let webhook_client = args.webhook.webhook_url.map(|url| {
-        WebhookClient::new(
-            url,
-            args.webhook.webhook_template,
-            args.webhook.webhook_retries,
-            std::time::Duration::from_secs(10),
-            tracker.clone(),
-        )
+    let webhook_client = args.webhook.webhook_url.as_ref().map(|url| {
+        let config = WebhookClientConfig::from(&args.webhook);
+        WebhookClient::new(url.clone(), config, tracker.clone())
     });
 
     let stream_future = created_files_stream
