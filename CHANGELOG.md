@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2](https://github.com/kevinastone/lynceus/compare/v0.4.1...v0.4.2) - 2026-05-29
+
+### Added
+
+- restructure CLI arguments into logical subgroups and implement custom Display logging
+
+### Other
+
+- introduce WebhookClientConfig and implement From<&WebhookArgs>
+- add gc-max-store-size-linux setting to nix store cache
+
 ## [0.4.1](https://github.com/kevinastone/lynceus/compare/v0.4.0...v0.4.1) - 2026-05-29
 
 ### Added
