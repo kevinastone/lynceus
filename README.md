@@ -15,6 +15,75 @@ Lynceus tracks newly created files and ensures that writing/copying processes ha
 
 ---
 
+## Three-Stage Processing Pipeline
+
+Lynceus processes file system events sequentially through three highly optimized stages:
+
+```mermaid
+graph TD
+    %% Watcher Section
+    subgraph Watcher ["1. Directory Watcher & Filter"]
+        A["Target Directory (SMB/CIFS)"] -->|Interval-based Polling| B["Detect Changed/New Files"]
+        B --> C{"Glob Pattern Filter?"}
+        C -->|Does Not Match| D["Ignore Event"]
+        C -->|Matches| E["Forward to Stream"]
+    end
+
+    %% Stabilizer Section
+    subgraph Stabilizer ["2. File Stabilizer (Concurrent)"]
+        E --> F["Wait Queue (.buffer_unordered)"]
+        F --> G["Initiate Cooldown Timer"]
+        G --> H["Check Size & Mod Time"]
+        H --> I{"Stable over Cooldown?"}
+        I -->|No / Modifying| G
+        I -->|Error limit exceeded| K["Discard (Timeout)"]
+        I -->|Yes, stable-count reached| L["Emit 'File Created' Event"]
+    end
+
+    %% Webhook Section
+    subgraph Webhook ["3. Webhook Dispatcher (Non-Blocking)"]
+        L --> M["Format Payload (Liquid Templates)"]
+        M --> N["Spawn Async Task (TaskTracker)"]
+        N --> O["POST HTTP request"]
+        O --> P{"Response Success?"}
+        P -->|No & Retries Available| Q["Exponential Backoff"] --> N
+        P -->|No & Max Retries Exceeded| R["Log Error & Drop"]
+        P -->|Yes| S["Success (Log Status)"]
+    end
+
+    %% Styling Elements for Visual Appeal
+    classDef watcherStyle fill:#f0f8ff,stroke:#0066cc,stroke-width:1px,color:#003366;
+    classDef stabilizerStyle fill:#fffcf0,stroke:#cc9900,stroke-width:1px,color:#664400;
+    classDef webhookStyle fill:#f0fff0,stroke:#00cc66,stroke-width:1px,color:#004400;
+    classDef processNode fill:#ffffff,stroke:#333333,stroke-width:1px;
+
+    class A,B,C,D,E processNode;
+    class F,G,H,I,K,L processNode;
+    class M,N,O,P,Q,R,S processNode;
+
+    class Watcher watcherStyle;
+    class Stabilizer stabilizerStyle;
+    class Webhook webhookStyle;
+```
+
+### 1. Directory Watcher & Filter
+- **Interval Polling**: Regularly scans the target watch directory to detect new files, handling network shares where native event APIs (e.g. `inotify`, `FSEvents`) fall short.
+- **Debouncing**: Debounces incoming events to prevent overwhelming the processing queue.
+- **Pattern Matching**: Applies glob filters (e.g., `--pattern "**/*.txt"`) early on to immediately discard irrelevant files.
+
+### 2. File Stabilizer
+- **Concurrent Monitoring**: Uses an async queue (`.buffer_unordered(100)`) to concurrently track up to 100 files simultaneously without blocking other detections.
+- **Stability Heuristic**: Measures file size and modification times across successive `cooldown` intervals. A file is declared fully written only after surviving `stable-count` consecutive checks without size or modification changes.
+- **Resilience**: If a file check fails continuously (e.g., locked file, network drop), it automatically times out and drops the event after `error-count` consecutive errors.
+
+### 3. Webhook Dispatcher
+- **Liquid Rendering**: Generates flexible JSON payloads dynamically using the Liquid template engine based on the `--webhook-template` option.
+- **Non-blocking Dispatch**: Dispatches events asynchronously via background tasks (`tokio::spawn`), isolated from the main watching loop.
+- **Exponential Backoff**: Resilient HTTP POST delivery that retries transient failures with progressive backoff.
+- **Graceful Shutdown**: Integrates with a `TaskTracker` to guarantee pending webhooks are fully drained upon termination.
+
+---
+
 ## Installation
 
 Ensure you have Rust installed (MSRV 1.85+), then clone the repository and build the binary:
