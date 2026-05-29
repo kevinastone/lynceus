@@ -1,10 +1,22 @@
 use crate::stability::StabilityConfig;
-use clap::Parser;
+use clap::{Args as ClapArgs, Parser};
 use std::time::Duration;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct Args {
+    #[clap(flatten)]
+    pub watcher: WatcherArgs,
+
+    #[clap(flatten)]
+    pub stabilizer: StabilizerArgs,
+
+    #[clap(flatten)]
+    pub webhook: WebhookArgs,
+}
+
+#[derive(ClapArgs, Debug, Clone)]
+pub struct WatcherArgs {
     /// Path to watch for changes
     #[arg(env = "LYNCEUS_PATH")]
     pub path: std::path::PathBuf,
@@ -12,23 +24,6 @@ pub struct Args {
     /// Optional glob pattern relative to the watch path to filter created files (e.g. "**/*.txt")
     #[arg(short, long, env = "LYNCEUS_PATTERN")]
     pub pattern: Option<String>,
-
-    /// Optional webhook URL to post a message to when a file is created
-    #[arg(env = "LYNCEUS_WEBHOOK_URL")]
-    pub webhook_url: Option<String>,
-
-    /// Optional JSON template for the webhook payload. Supports `{{path}}`, `{{type}}`, and `{{timestamp}}` placeholders.
-    #[arg(
-        long,
-        env = "LYNCEUS_WEBHOOK_TEMPLATE",
-        value_parser = parse_json,
-        default_value = r#"{"type":"{{type}}","timestamp":"{{timestamp}}","path":"{{path}}"}"#
-    )]
-    pub webhook_template: serde_json::Value,
-
-    /// Number of retries when sending a webhook fails
-    #[arg(long, env = "LYNCEUS_WEBHOOK_RETRIES", default_value_t = 3)]
-    pub webhook_retries: usize,
 
     /// Polling interval (e.g. 2s, 500ms)
     #[arg(
@@ -47,7 +42,10 @@ pub struct Args {
         default_value_t = humantime::Duration::from(Duration::from_secs(5))
     )]
     pub debounce: humantime::Duration,
+}
 
+#[derive(ClapArgs, Debug, Clone)]
+pub struct StabilizerArgs {
     /// Cooldown interval for checking file stability (e.g. 10s, 30s)
     #[arg(
         short,
@@ -76,6 +74,74 @@ pub struct Args {
     pub error_count: std::num::NonZeroUsize,
 }
 
+#[derive(ClapArgs, Debug, Clone)]
+pub struct WebhookArgs {
+    /// Optional webhook URL to post a message to when a file is created
+    #[arg(env = "LYNCEUS_WEBHOOK_URL")]
+    pub webhook_url: Option<String>,
+
+    /// Optional JSON template for the webhook payload. Supports `{{path}}`, `{{type}}`, and `{{timestamp}}` placeholders.
+    #[arg(
+        long,
+        env = "LYNCEUS_WEBHOOK_TEMPLATE",
+        value_parser = parse_json,
+        default_value = r#"{"type":"{{type}}","timestamp":"{{timestamp}}","path":"{{path}}"}"#
+    )]
+    pub webhook_template: serde_json::Value,
+
+    /// Number of retries when sending a webhook fails
+    #[arg(long, env = "LYNCEUS_WEBHOOK_RETRIES", default_value_t = 3)]
+    pub webhook_retries: usize,
+}
+
 fn parse_json(s: &str) -> Result<serde_json::Value, String> {
     serde_json::from_str(s).map_err(|e| format!("invalid JSON: {}", e))
+}
+
+impl std::fmt::Display for WatcherArgs {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "path={:?} interval={} debounce={}",
+            self.path, self.interval, self.debounce
+        )?;
+        if let Some(ref pattern) = self.pattern {
+            write!(f, " pattern={:?}", pattern)?;
+        }
+        Ok(())
+    }
+}
+
+impl std::fmt::Display for StabilizerArgs {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "cooldown={} stable_count={} error_count={}",
+            self.cooldown, self.stable_count, self.error_count
+        )
+    }
+}
+
+impl std::fmt::Display for WebhookArgs {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(ref webhook_url) = self.webhook_url {
+            write!(
+                f,
+                "url={:?} retries={} template={}",
+                webhook_url, self.webhook_retries, self.webhook_template
+            )
+        } else {
+            write!(f, "None")
+        }
+    }
+}
+
+impl std::fmt::Display for Args {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "watcher={{{}}} stabilizer={{{}}} webhook={{{}}}",
+            self.watcher, self.stabilizer, self.webhook
+        )
+    }
 }
