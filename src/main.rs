@@ -112,10 +112,11 @@ async fn main() -> anyhow::Result<()> {
         _ = stream_future => {
             tracing::error!("Event stream terminated unexpectedly");
         }
-        _ = tokio::signal::ctrl_c() => {
-            tracing::info!("Shutdown signal received. Initiating graceful shutdown...");
-        }
+        _ = shutdown_signal() => {}
     }
+
+    // Stop watching and drop the watcher immediately before draining webhooks
+    std::mem::drop(_watcher);
 
     tracker.close();
 
@@ -129,4 +130,32 @@ async fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {
+            tracing::info!("Shutdown signal (SIGINT) received. Initiating graceful shutdown...");
+        }
+        _ = terminate => {
+            tracing::info!("Shutdown signal (SIGTERM) received. Initiating graceful shutdown...");
+        }
+    }
 }
