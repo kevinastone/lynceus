@@ -32,8 +32,13 @@ jobs:
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Magic Nix Cache (Faster Builds)
-        uses: DeterminateSystems/magic-nix-cache-action@908b263ff629f4cc17666315b7fd3ec127c6244d
+      - &cache-nix-store
+        name: Cache Nix Store
+        uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: ${{ runner.os }}-nix-${{ hashFiles('flake.lock', 'Cargo.lock') }}
+          restore-prefixes-first-match: |
+            ${{ runner.os }}-nix-
 
       - name: Run Nix checks
         run: nix flake check -L
@@ -57,8 +62,7 @@ jobs:
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Magic Nix Cache (Faster Builds)
-        uses: DeterminateSystems/magic-nix-cache-action@908b263ff629f4cc17666315b7fd3ec127c6244d
+      - *cache-nix-store
 
       # Generate docker tags
       - name: Docker meta
