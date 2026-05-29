@@ -4,7 +4,6 @@ version = "0.4.2"
 edition = "2024"
 description = "lynceus is a file watcher that reports file changes using a webhook."
 repository = "https://github.com/kevinastone/lynceus"
-publish = false
 
 [dependencies]
 anyhow = "1.0.93"
