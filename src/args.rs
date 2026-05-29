@@ -1,4 +1,5 @@
 use crate::stability::StabilityConfig;
+use crate::webhook::WebhookClientConfig;
 use clap::{Args as ClapArgs, Parser};
 use std::time::Duration;
 
@@ -85,12 +86,16 @@ pub struct WebhookArgs {
         long,
         env = "LYNCEUS_WEBHOOK_TEMPLATE",
         value_parser = parse_json,
-        default_value = r#"{"type":"{{type}}","timestamp":"{{timestamp}}","path":"{{path}}"}"#
+        default_value = WebhookClientConfig::DEFAULT_TEMPLATE
     )]
     pub webhook_template: serde_json::Value,
 
     /// Number of retries when sending a webhook fails
-    #[arg(long, env = "LYNCEUS_WEBHOOK_RETRIES", default_value_t = 3)]
+    #[arg(
+        long,
+        env = "LYNCEUS_WEBHOOK_RETRIES",
+        default_value_t = WebhookClientConfig::DEFAULT_RETRIES
+    )]
     pub webhook_retries: usize,
 }
 
@@ -143,5 +148,38 @@ impl std::fmt::Display for Args {
             "watcher={{{}}} stabilizer={{{}}} webhook={{{}}}",
             self.watcher, self.stabilizer, self.webhook
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_args_display() {
+        let args = Args {
+            watcher: WatcherArgs {
+                path: std::path::PathBuf::from("/tmp"),
+                pattern: Some("**/*.rs".to_string()),
+                interval: humantime::Duration::from(std::time::Duration::from_secs(2)),
+                debounce: humantime::Duration::from(std::time::Duration::from_secs(5)),
+            },
+            stabilizer: StabilizerArgs {
+                cooldown: humantime::Duration::from(std::time::Duration::from_secs(10)),
+                stable_count: std::num::NonZeroUsize::new(3).unwrap(),
+                error_count: std::num::NonZeroUsize::new(5).unwrap(),
+            },
+            webhook: WebhookArgs {
+                webhook_url: Some("http://localhost".to_string()),
+                webhook_template: serde_json::json!({"path": "{{path}}"}),
+                webhook_retries: 3,
+            },
+        };
+
+        let formatted = format!("{}", args);
+        assert_eq!(
+            formatted,
+            "watcher={path=\"/tmp\" interval=2s debounce=5s pattern=\"**/*.rs\"} stabilizer={cooldown=10s stable_count=3 error_count=5} webhook={url=\"http://localhost\" retries=3 template={\"path\":\"{{path}}\"}}"
+        );
     }
 }
