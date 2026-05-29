@@ -37,9 +37,6 @@ jobs:
         uses: nix-community/cache-nix-action@v7
         with:
           primary-key: ${{ runner.os }}-nix-${{ hashFiles('flake.lock', 'Cargo.lock') }}
-          restore-prefixes-first-match: |
-            ${{ runner.os }}-nix-
-          gc-max-store-size-linux: 2G
 
       - name: Run Nix checks
         run: nix flake check -L
