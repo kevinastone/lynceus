@@ -91,24 +91,15 @@
           image =
             with pkgs;
             dockerTools.buildImage {
-              name = "lynceus";
-              copyToRoot = buildEnv {
-                name = "image-root";
-                paths = [
-                  cacert
-                  lynceus
-                  bashInteractive
-                  coreutils
-                ];
-                pathsToLink = [
-                  "/bin"
-                  "/etc"
-                ];
-              };
-              config.Env = [
-                "SSL_CERT_FILE=${cacert}/etc/ssl/certs/ca-bundle.crt"
+              name = default.pname;
+              copyToRoot = with dockerTools; [
+                usrBinEnv
+                binSh
+                coreutils
+                caCertificates
+                fakeNss
               ];
-              config.Entrypoint = [ "/bin/lynceus" ];
+              config.Entrypoint = [ "${lynceus}/bin/lynceus" ];
               config.Labels = with cargoToml; {
                 "org.opencontainers.image.title" = package.name;
                 "org.opencontainers.image.source" = package.repository or "";
