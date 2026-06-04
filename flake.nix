@@ -66,20 +66,17 @@
             coreutils
           ];
           text = ''
-            if [ "$#" -lt 2 ]; then
-              echo "Usage: push-multiarch <amd64-image-tar> <arm64-image-tar>"
+            if [ "$#" -lt 3 ]; then
+              echo "Usage: push-multiarch <registry-repo> <amd64-image-tar> <arm64-image-tar>"
               exit 1
             fi
 
-            AMD64_IMAGE="$1"
-            ARM64_IMAGE="$2"
+            REPO=$(echo "$1" | tr '[:upper:]' '[:lower:]')
+            AMD64_IMAGE="$2"
+            ARM64_IMAGE="$3"
 
             if [ -z "''${TAGS:-}" ]; then
               echo "Error: TAGS environment variable is not set"
-              exit 1
-            fi
-            if [ -z "''${REPO:-}" ]; then
-              echo "Error: REPO environment variable is not set"
               exit 1
             fi
 

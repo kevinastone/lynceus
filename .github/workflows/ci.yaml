@@ -89,9 +89,8 @@ jobs:
       - name: ⬆️ Push Multi-Arch Image to GHCR
         env:
           TAGS: ${{ steps.meta.outputs.tags }}
-          REPO: ${{ steps.meta.outputs.images }}
         run: |
-          nix run .#push-multiarch -- result-amd64 result-arm64
+          nix run .#push-multiarch -- "ghcr.io/${{ github.repository }}" result-amd64 result-arm64
 
   release-plz-release:
     name: Release-plz release
