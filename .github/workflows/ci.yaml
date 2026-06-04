@@ -55,10 +55,15 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Install Nix
         uses: cachix/install-nix-action@v31
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: |
+            extra-platforms = aarch64-linux
 
       - *cache-nix-store
 
@@ -67,7 +72,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ghcr.io/kevinastone/lynceus
+          images: ghcr.io/${{ github.repository }}
 
       - name: Login to GHCR
         uses: docker/login-action@v4
@@ -76,21 +81,48 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 📦 Build Docker Image with Nix
-        run: nix build .#image -L
+      - name: 📦 Build Multi-Arch Docker Images with Nix
+        run: |
+          nix build .#packages.x86_64-linux.image --out-link result-amd64 -L
+          nix build .#packages.aarch64-linux.image --out-link result-arm64 -L
 
-      - name: ⬆️ Push Image to GHCR with Skopeo
+      - name: ⚙️ Install regctl
+        run: nix profile install .#regctl
+
+      - name: ⬆️ Push Multi-Arch Image to GHCR with Regctl
         env:
           TAGS: ${{ steps.meta.outputs.tags }}
+          REPO: ${{ steps.meta.outputs.images }}
         run: |
+          # Import images into local OCI layout directories directly from Nix build symlinks
+          regctl image import ocidir://./local-oci-amd64 result-amd64
+          regctl image import ocidir://./local-oci-arm64 result-arm64
+
+          # Get the digests of the imported OCI layouts
+          AMD64_DIGEST=$(regctl image digest ocidir://./local-oci-amd64)
+          ARM64_DIGEST=$(regctl image digest ocidir://./local-oci-arm64)
+
+          # Push single-architecture layers and manifests by digest (only once per repo)
+          echo "Pushing AMD64 digest: $AMD64_DIGEST to $REPO..."
+          regctl image copy ocidir://./local-oci-amd64 "$REPO@$AMD64_DIGEST"
+
+          echo "Pushing ARM64 digest: $ARM64_DIGEST to $REPO..."
+          regctl image copy ocidir://./local-oci-arm64 "$REPO@$ARM64_DIGEST"
+
+          # Create and push the multi-architecture manifest index for each tag
           echo "$TAGS" | while read -r tag; do
             if [ -n "$tag" ]; then
-              echo "Pushing to $tag..."
-              nix run .#skopeo -- --insecure-policy copy --all \
-                docker-archive:./result \
-                docker://$tag
+              echo "Creating and pushing multi-arch index for $tag..."
+              regctl index create "$tag" \
+                --ref "$REPO@$AMD64_DIGEST" \
+                --platform linux/amd64 \
+                --ref "$REPO@$ARM64_DIGEST" \
+                --platform linux/arm64
             fi
           done
+
+          # Cleanup local OCI layouts
+          rm -rf ./local-oci-amd64 ./local-oci-arm64
 
   release-plz-release:
     name: Release-plz release

@@ -107,7 +107,7 @@
               };
             };
 
-          inherit (pkgs) skopeo;
+          inherit (pkgs) skopeo regctl;
         };
 
         checks = {
@@ -122,6 +122,7 @@
             checks = self.checks.${system};
             packages = [
               skopeo
+              regctl
               cargo-outdated
               cargo-release
               git-cliff
