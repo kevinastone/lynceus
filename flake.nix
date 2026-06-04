@@ -58,6 +58,82 @@
           }
         );
 
+        # Helper to compile the container image for Linux (either natively or cross-compiled)
+        makeImage =
+          targetConfig:
+          let
+            targetPkgs =
+              if targetConfig == null then
+                pkgs
+              else
+                import nixpkgs {
+                  inherit system;
+                  crossSystem = {
+                    config = targetConfig;
+                  };
+                };
+
+            targetCraneLib = crane.mkLib targetPkgs;
+            isCross = targetPkgs.stdenv.hostPlatform != targetPkgs.stdenv.buildPlatform;
+
+            crossArgs =
+              commonArgs
+              // (targetPkgs.lib.optionalAttrs isCross (
+                let
+                  rustHostTriple = targetPkgs.stdenv.buildPlatform.config;
+                  rustHostTripleEnv = builtins.replaceStrings [ "-" ] [ "_" ] rustHostTriple;
+                  nixHostSuffix =
+                    if targetPkgs.stdenv.buildPlatform.isDarwin && targetPkgs.stdenv.buildPlatform.isAarch64 then
+                      "arm64_apple_darwin"
+                    else
+                      rustHostTripleEnv;
+                  cargoHostLinkerVar = "CARGO_TARGET_" + targetPkgs.lib.toUpper rustHostTripleEnv + "_LINKER";
+                  isDarwin = targetPkgs.stdenv.buildPlatform.isDarwin;
+                in
+                {
+                  HOST_CC = "${targetPkgs.buildPackages.stdenv.cc}/bin/cc";
+                  HOST_CXX = "${targetPkgs.buildPackages.stdenv.cc}/bin/c++";
+                  "${cargoHostLinkerVar}" = "${targetPkgs.buildPackages.stdenv.cc}/bin/cc";
+                }
+                // targetPkgs.lib.optionalAttrs isDarwin {
+                  depsBuildBuild = [
+                    targetPkgs.libiconv
+                  ];
+                  nativeBuildInputs = [
+                    targetPkgs.buildPackages.libiconv
+                  ];
+                  "NIX_LDFLAGS_${nixHostSuffix}" = "-L${targetPkgs.buildPackages.libiconv}/lib";
+                  "NIX_CFLAGS_COMPILE_${nixHostSuffix}" = "-I${targetPkgs.buildPackages.libiconv}/include";
+                }
+              ));
+
+            cargoArtifactsCross = targetCraneLib.buildDepsOnly crossArgs;
+
+            lynceusCross = targetCraneLib.buildPackage (
+              crossArgs
+              // {
+                inherit cargoArtifactsCross;
+              }
+            );
+          in
+          with targetPkgs;
+          dockerTools.buildImage {
+            name = cargoToml.package.name;
+            copyToRoot = with dockerTools; [
+              usrBinEnv
+              binSh
+              coreutils
+              caCertificates
+              fakeNss
+            ];
+            config.Entrypoint = [ "${lynceusCross}/bin/lynceus" ];
+            config.Labels = with cargoToml; {
+              "org.opencontainers.image.title" = package.name;
+              "org.opencontainers.image.source" = package.repository or "";
+              "org.opencontainers.image.description" = package.description or "";
+            };
+          };
+
         push-multiarch = pkgs.writeShellApplication {
           name = "push-multiarch";
           runtimeInputs = with pkgs; [
@@ -79,6 +155,7 @@
               echo "Error: TAGS environment variable is not set"
               exit 1
             fi
+
 
             # Import images into local OCI layout directories directly from Nix build outputs
             regctl image import ocidir://./local-oci-amd64 "$AMD64_IMAGE"
@@ -143,24 +220,9 @@
             }
           );
 
-          image =
-            with pkgs;
-            dockerTools.buildImage {
-              name = default.pname;
-              copyToRoot = with dockerTools; [
-                usrBinEnv
-                binSh
-                coreutils
-                caCertificates
-                fakeNss
-              ];
-              config.Entrypoint = [ "${lynceus}/bin/lynceus" ];
-              config.Labels = with cargoToml; {
-                "org.opencontainers.image.title" = package.name;
-                "org.opencontainers.image.source" = package.repository or "";
-                "org.opencontainers.image.description" = package.description or "";
-              };
-            };
+          image = makeImage null;
+          image-amd64 = makeImage "x86_64-unknown-linux-gnu";
+          image-arm64 = makeImage "aarch64-unknown-linux-gnu";
 
           inherit push-multiarch;
         };

@@ -55,15 +55,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
       - name: Install Nix
         uses: cachix/install-nix-action@v31
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
-          extra_nix_config: |
-            extra-platforms = aarch64-linux
 
       - *cache-nix-store
 
@@ -81,10 +76,10 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 📦 Build Multi-Arch Docker Images with Nix
+      - name: 📦 Build Multi-Arch Docker Images with Nix (Cross-Compiled!)
         run: |
-          nix build .#packages.x86_64-linux.image --out-link result-amd64 -L
-          nix build .#packages.aarch64-linux.image --out-link result-arm64 -L
+          nix build .#image-amd64 --out-link result-amd64 -L
+          nix build .#image-arm64 --out-link result-arm64 -L
 
       - name: ⬆️ Push Multi-Arch Image to GHCR
         env:
