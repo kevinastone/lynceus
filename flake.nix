@@ -71,39 +71,19 @@
                   crossSystem = targetSystem;
                 };
 
+            inherit (targetPkgs) stdenv lib;
             targetCraneLib = crane.mkLib targetPkgs;
-            isCross = targetPkgs.stdenv.hostPlatform != targetPkgs.stdenv.buildPlatform;
+            isCross = stdenv.hostPlatform != stdenv.buildPlatform;
+            isBuildDarwin = stdenv.buildPlatform.isDarwin;
 
             crossArgs =
               commonArgs
-              // (targetPkgs.lib.optionalAttrs isCross (
-                let
-                  rustHostTriple = targetPkgs.stdenv.buildPlatform.config;
-                  rustHostTripleEnv = builtins.replaceStrings [ "-" ] [ "_" ] rustHostTriple;
-                  nixHostSuffix =
-                    if targetPkgs.stdenv.buildPlatform.isDarwin && targetPkgs.stdenv.buildPlatform.isAarch64 then
-                      "arm64_apple_darwin"
-                    else
-                      rustHostTripleEnv;
-                  cargoHostLinkerVar = "CARGO_TARGET_" + targetPkgs.lib.toUpper rustHostTripleEnv + "_LINKER";
-                  isDarwin = targetPkgs.stdenv.buildPlatform.isDarwin;
-                in
-                {
-                  HOST_CC = "${targetPkgs.buildPackages.stdenv.cc}/bin/cc";
-                  HOST_CXX = "${targetPkgs.buildPackages.stdenv.cc}/bin/c++";
-                  "${cargoHostLinkerVar}" = "${targetPkgs.buildPackages.stdenv.cc}/bin/cc";
-                }
-                // targetPkgs.lib.optionalAttrs isDarwin {
-                  depsBuildBuild = [
-                    targetPkgs.libiconv
-                  ];
-                  nativeBuildInputs = [
-                    targetPkgs.buildPackages.libiconv
-                  ];
-                  "NIX_LDFLAGS_${nixHostSuffix}" = "-L${targetPkgs.buildPackages.libiconv}/lib";
-                  "NIX_CFLAGS_COMPILE_${nixHostSuffix}" = "-I${targetPkgs.buildPackages.libiconv}/include";
-                }
-              ));
+              // lib.optionalAttrs (isCross && isBuildDarwin) {
+                depsBuildBuild = [
+                  targetPkgs.libiconv
+                ];
+                "NIX_LDFLAGS" = "-L${targetPkgs.buildPackages.libiconv}/lib";
+              };
 
             cargoArtifactsCross = targetCraneLib.buildDepsOnly crossArgs;
 
