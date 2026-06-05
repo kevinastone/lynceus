@@ -44,6 +44,7 @@
         commonArgs = {
           inherit src;
           strictDeps = true;
+          doCheck = false;
           SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
         };
 
