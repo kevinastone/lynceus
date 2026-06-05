@@ -60,17 +60,15 @@
 
         # Helper to compile the container image for Linux (either natively or cross-compiled)
         makeImage =
-          targetConfig:
+          targetSystem:
           let
             targetPkgs =
-              if targetConfig == null then
+              if targetSystem == system then
                 pkgs
               else
                 import nixpkgs {
                   inherit system;
-                  crossSystem = {
-                    config = targetConfig;
-                  };
+                  crossSystem = targetSystem;
                 };
 
             targetCraneLib = crane.mkLib targetPkgs;
@@ -220,9 +218,9 @@
             }
           );
 
-          image = makeImage null;
-          image-amd64 = makeImage "x86_64-unknown-linux-gnu";
-          image-arm64 = makeImage "aarch64-unknown-linux-gnu";
+          image = makeImage system;
+          image-amd64 = makeImage "x86_64-linux";
+          image-arm64 = makeImage "aarch64-linux";
 
           inherit push-multiarch;
         };
