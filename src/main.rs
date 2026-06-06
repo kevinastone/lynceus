@@ -1,5 +1,6 @@
 use clap::Parser;
 use futures::prelude::*;
+use tracing::Instrument;
 
 mod args;
 pub use args::Args;
@@ -61,41 +62,31 @@ async fn main() -> anyhow::Result<()> {
         WebhookClient::new(url.clone(), config, tracker.clone())
     });
 
-    let stream_future = created_files_stream
-        .map({
+    let stream_future = created_files_stream.for_each_concurrent(100, {
+        let stabilizer = stabilizer.clone();
+        let webhook_client = webhook_client.clone();
+        move |relative_path| {
             let stabilizer = stabilizer.clone();
-            move |relative_path| {
-                let stabilizer = stabilizer.clone();
-                async move {
-                    tracing::debug!(
-                        path = ?relative_path,
-                        "New file detected, waiting for write to complete"
-                    );
-                    stabilizer.wait(relative_path).await
-                }
-            }
-        })
-        .buffer_unordered(100)
-        .for_each(|result| {
             let webhook_client = webhook_client.clone();
+            let span = tracing::info_span!("file.process", path = %relative_path);
             async move {
-                match result {
+                tracing::debug!("New file detected, waiting for write to complete");
+                match stabilizer.wait(relative_path).await {
                     Ok(rel_path) => {
-                        tracing::info!(path = ?rel_path, "File created");
+                        tracing::info!("File created");
                         if let Some(client) = webhook_client.as_ref() {
                             let event = Event::file_created(rel_path);
                             client.send_notification(event);
                         }
                     }
-                    Err(rel_path) => {
-                        tracing::error!(
-                            path = ?rel_path,
-                            "Timeout waiting for file stability"
-                        );
+                    Err(_rel_path) => {
+                        tracing::error!("Timeout waiting for file stability");
                     }
                 }
             }
-        });
+            .instrument(span)
+        }
+    });
 
     tokio::select! {
         _ = stream_future => {

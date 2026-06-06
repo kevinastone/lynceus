@@ -2,6 +2,7 @@ use anyhow::Context;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
 use tokio_util::task::TaskTracker;
+use tracing::Instrument;
 
 use crate::args::WebhookArgs;
 use crate::events::Event;
@@ -70,48 +71,52 @@ impl WebhookClient {
         let client = self.client.clone();
         let url = self.url.clone();
         let tmpl = self.template.clone();
+        let span = tracing::Span::current();
 
-        self.tracker.spawn(async move {
-            let res = async {
-                let data = serde_json::to_value(&event)
-                    .map_err(|e| anyhow::anyhow!("Failed to serialize event: {}", e))?;
-                let payload = tmpl
-                    .render(&data)
-                    .map_err(|e| anyhow::anyhow!("Failed to render liquid template: {}", e))?;
+        self.tracker.spawn(
+            async move {
+                let res = async {
+                    let data = serde_json::to_value(&event)
+                        .map_err(|e| anyhow::anyhow!("Failed to serialize event: {}", e))?;
+                    let payload = tmpl
+                        .render(&data)
+                        .map_err(|e| anyhow::anyhow!("Failed to render liquid template: {}", e))?;
 
-                let resp = client
-                    .post(&url)
-                    .json(&payload)
-                    .send()
-                    .await
-                    .with_context(|| format!("Failed to send HTTP POST request to {}", url))?;
+                    let resp = client
+                        .post(&url)
+                        .json(&payload)
+                        .send()
+                        .await
+                        .with_context(|| format!("Failed to send HTTP POST request to {}", url))?;
 
-                if !resp.status().is_success() {
-                    anyhow::bail!("Webhook server returned status {}", resp.status());
+                    if !resp.status().is_success() {
+                        anyhow::bail!("Webhook server returned status {}", resp.status());
+                    }
+
+                    Ok::<(), anyhow::Error>(())
                 }
+                .await;
 
-                Ok::<(), anyhow::Error>(())
+                match res {
+                    Ok(_) => {
+                        tracing::info!(
+                            url = %url,
+                            ?event,
+                            "Webhook notification sent successfully"
+                        );
+                    }
+                    Err(e) => {
+                        tracing::error!(
+                            error = ?e,
+                            url = %url,
+                            ?event,
+                            "Failed to send webhook notification"
+                        );
+                    }
+                }
             }
-            .await;
-
-            match res {
-                Ok(_) => {
-                    tracing::info!(
-                        ?event,
-                        url = %url,
-                        "Webhook notification sent successfully"
-                    );
-                }
-                Err(e) => {
-                    tracing::error!(
-                        error = ?e,
-                        ?event,
-                        url = %url,
-                        "Failed to send webhook notification"
-                    );
-                }
-            }
-        });
+            .instrument(span),
+        );
     }
 }
 

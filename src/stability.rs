@@ -90,7 +90,6 @@ impl FileStabilizer {
                         stable_count += 1;
                         let size_str = humanize_bytes(current_size);
                         tracing::debug!(
-                            path = ?relative_path,
                             size = %size_str,
                             stable_count,
                             "File is stable"
@@ -102,7 +101,6 @@ impl FileStabilizer {
                         let old_size_str = last_size.map(humanize_bytes);
                         let new_size_str = humanize_bytes(current_size);
                         tracing::debug!(
-                            path = ?relative_path,
                             old_size = ?old_size_str,
                             new_size = %new_size_str,
                             "File size or modification time changed, resetting stable count"
@@ -116,7 +114,6 @@ impl FileStabilizer {
                     stable_count = 0;
                     error_count += 1;
                     tracing::debug!(
-                        path = ?relative_path,
                         error = ?e,
                         error_count,
                         "Failed to read metadata"
