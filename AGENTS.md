@@ -28,6 +28,9 @@ This project builds highly-reproducible, minimal Docker/OCI images using Nix:
   nix run .#skopeo -- --insecure-policy copy --all docker-archive:./result docker://<destination>
   ```
 
+### 4. Git Commits
+Do **not** commit any code changes using `git commit` without explicitly asking and obtaining confirmation from the user first.
+
 ---
 
 ## 📐 Coding Standards & Conventions
