@@ -1,6 +1,6 @@
 use crate::args::StabilizerArgs;
+use camino::Utf8PathBuf;
 use std::num::NonZeroUsize;
-use std::path::PathBuf;
 use std::time::Duration;
 
 #[derive(Clone, Copy, Debug)]
@@ -63,16 +63,16 @@ fn humanize_bytes(bytes: u64) -> String {
 }
 
 pub struct FileStabilizer {
-    root_path: PathBuf,
+    root_path: Utf8PathBuf,
     config: StabilityConfig,
 }
 
 impl FileStabilizer {
-    pub fn new(root_path: PathBuf, config: StabilityConfig) -> Self {
+    pub fn new(root_path: Utf8PathBuf, config: StabilityConfig) -> Self {
         Self { root_path, config }
     }
 
-    pub async fn wait(&self, relative_path: PathBuf) -> Result<PathBuf, PathBuf> {
+    pub async fn wait(&self, relative_path: Utf8PathBuf) -> Result<Utf8PathBuf, Utf8PathBuf> {
         let full_path = self.root_path.join(&relative_path);
         let mut last_size = None;
         let mut last_modified = None;
@@ -162,7 +162,8 @@ mod tests {
         };
         let stabilizer = FileStabilizer::new(temp.path.clone(), config);
 
-        let handle = tokio::spawn(async move { stabilizer.wait(PathBuf::from("file.txt")).await });
+        let handle =
+            tokio::spawn(async move { stabilizer.wait(Utf8PathBuf::from("file.txt")).await });
 
         // Let the stabilizer execute the first metadata check, then yield on the sleep.
         tokio::task::yield_now().await;
@@ -175,7 +176,7 @@ mod tests {
         tokio::time::advance(cooldown).await;
 
         let res = handle.await.unwrap();
-        assert_eq!(res, Ok(PathBuf::from("file.txt")));
+        assert_eq!(res, Ok(Utf8PathBuf::from("file.txt")));
     }
 
     #[tokio::test(start_paused = true)]
@@ -190,7 +191,8 @@ mod tests {
         };
         let stabilizer = FileStabilizer::new(temp.path.clone(), config);
 
-        let handle = tokio::spawn(async move { stabilizer.wait(PathBuf::from("file.txt")).await });
+        let handle =
+            tokio::spawn(async move { stabilizer.wait(Utf8PathBuf::from("file.txt")).await });
 
         // Let the first error tick happen (error_count becomes 1).
         tokio::task::yield_now().await;
@@ -203,7 +205,7 @@ mod tests {
         tokio::time::advance(cooldown).await;
 
         let res = handle.await.unwrap();
-        assert_eq!(res, Err(PathBuf::from("file.txt")));
+        assert_eq!(res, Err(Utf8PathBuf::from("file.txt")));
     }
 
     #[tokio::test(start_paused = true)]
@@ -220,7 +222,8 @@ mod tests {
         };
         let stabilizer = FileStabilizer::new(temp.path.clone(), config);
 
-        let handle = tokio::spawn(async move { stabilizer.wait(PathBuf::from("file.txt")).await });
+        let handle =
+            tokio::spawn(async move { stabilizer.wait(Utf8PathBuf::from("file.txt")).await });
 
         // Let the first metadata check happen (size 1, stable_count = 0)
         tokio::task::yield_now().await;
@@ -252,7 +255,7 @@ mod tests {
         tokio::time::advance(cooldown).await;
 
         let res = handle.await.unwrap();
-        assert_eq!(res, Ok(PathBuf::from("file.txt")));
+        assert_eq!(res, Ok(Utf8PathBuf::from("file.txt")));
 
         // Check the final file size
         let metadata = fs::metadata(&file_path).unwrap();

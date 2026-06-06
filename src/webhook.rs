@@ -118,8 +118,8 @@ impl WebhookClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use camino::Utf8Path;
     use serde_json::json;
-    use std::path::Path;
 
     #[test]
     fn test_render_template() {
@@ -189,7 +189,7 @@ mod tests {
             tracker.clone(),
         );
 
-        client.send_notification(Event::file_created(Path::new("test.txt").to_path_buf()));
+        client.send_notification(Event::file_created(Utf8Path::new("test.txt").to_path_buf()));
 
         // Wait for webhook to finish
         tracker.close();
@@ -237,7 +237,7 @@ mod tests {
             tracker.clone(),
         );
 
-        client.send_notification(Event::file_created(Path::new("test.txt").to_path_buf()));
+        client.send_notification(Event::file_created(Utf8Path::new("test.txt").to_path_buf()));
 
         tracker.close();
         let finished = tokio::select! {
@@ -273,7 +273,7 @@ mod tests {
             tracker.clone(),
         );
 
-        client.send_notification(Event::file_created(Path::new("test.txt").to_path_buf()));
+        client.send_notification(Event::file_created(Utf8Path::new("test.txt").to_path_buf()));
 
         tracker.close();
         let finished = tokio::select! {

@@ -32,15 +32,8 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     tracing::info!(%args, "Starting Lynceus");
 
-    let absolute_path = if args.watcher.path.is_absolute() {
-        args.watcher.path.clone()
-    } else {
-        std::env::current_dir()
-            .map(|cwd| cwd.join(&args.watcher.path))
-            .unwrap_or_else(|_| args.watcher.path.clone())
-    };
-
-    let watch_path = std::fs::canonicalize(&absolute_path).unwrap_or(absolute_path);
+    let watch_path =
+        camino::absolute_utf8(&args.watcher.path).unwrap_or_else(|_| args.watcher.path.clone());
 
     let (_watcher, created_files_stream) = DirectoryWatcher::new(
         watch_path.clone(),
@@ -51,12 +44,12 @@ async fn main() -> anyhow::Result<()> {
 
     if let Some(ref pat) = args.watcher.pattern {
         tracing::info!(
-            path = %watch_path.display(),
+            path = %watch_path,
             pattern = %pat,
             "Watching for new files matching pattern"
         );
     } else {
-        tracing::info!(path = %watch_path.display(), "Watching for new files");
+        tracing::info!(path = %watch_path, "Watching for new files");
     }
 
     let stability_config = StabilityConfig::from(&args.stabilizer);

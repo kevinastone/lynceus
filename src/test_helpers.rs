@@ -1,10 +1,10 @@
+use camino::Utf8PathBuf;
 use std::fs;
-use std::path::PathBuf;
 use std::time::SystemTime;
 
 /// A temporary directory helper that automatically deletes itself on drop.
 pub struct TempDir {
-    pub path: PathBuf,
+    pub path: Utf8PathBuf,
 }
 
 impl TempDir {
@@ -13,6 +13,7 @@ impl TempDir {
         let mut path = std::env::temp_dir();
         path.push(format!("lynceus_test_{}_{}", name, uuid_hex()));
         fs::create_dir_all(&path).unwrap();
+        let path = Utf8PathBuf::from_path_buf(path).expect("Temp path is not valid UTF-8");
         Self { path }
     }
 }

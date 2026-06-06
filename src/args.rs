@@ -1,5 +1,6 @@
 use crate::stability::StabilityConfig;
 use crate::webhook::WebhookClientConfig;
+use camino::Utf8PathBuf;
 use clap::{Args as ClapArgs, Parser};
 use std::time::Duration;
 
@@ -20,7 +21,7 @@ pub struct Args {
 pub struct WatcherArgs {
     /// Path to watch for changes
     #[arg(env = "LYNCEUS_PATH")]
-    pub path: std::path::PathBuf,
+    pub path: Utf8PathBuf,
 
     /// Optional glob pattern relative to the watch path to filter created files (e.g. "**/*.txt")
     #[arg(short, long, env = "LYNCEUS_PATTERN")]
@@ -159,7 +160,7 @@ mod tests {
     fn test_args_display() {
         let args = Args {
             watcher: WatcherArgs {
-                path: std::path::PathBuf::from("/tmp"),
+                path: Utf8PathBuf::from("/tmp"),
                 pattern: Some("**/*.rs".to_string()),
                 interval: humantime::Duration::from(std::time::Duration::from_secs(2)),
                 debounce: humantime::Duration::from(std::time::Duration::from_secs(5)),

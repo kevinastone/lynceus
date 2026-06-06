@@ -1,13 +1,6 @@
+use camino::Utf8PathBuf;
 use serde::Serialize;
-use std::path::PathBuf;
 use std::time::SystemTime;
-
-fn serialize_path_lossy<S>(path: &std::path::Path, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
-    serializer.serialize_str(&path.to_string_lossy())
-}
 
 fn serialize_system_time_rfc3339<S>(time: &SystemTime, serializer: S) -> Result<S::Ok, S::Error>
 where
@@ -29,10 +22,7 @@ pub struct Event {
 #[serde(tag = "type")]
 enum EventPayload {
     #[serde(rename = "file.created")]
-    FileCreated {
-        #[serde(serialize_with = "serialize_path_lossy")]
-        path: PathBuf,
-    },
+    FileCreated { path: Utf8PathBuf },
 }
 
 impl Event {
@@ -43,7 +33,7 @@ impl Event {
         }
     }
 
-    pub fn file_created(path: PathBuf) -> Self {
+    pub fn file_created(path: Utf8PathBuf) -> Self {
         Self::new(EventPayload::FileCreated { path })
     }
 
@@ -57,11 +47,10 @@ impl Event {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
 
     #[test]
     fn test_event_serialization() {
-        let event = Event::file_created(Path::new("dir/file.txt").to_path_buf())
+        let event = Event::file_created(Utf8PathBuf::from("dir/file.txt"))
             .with_timestamp(SystemTime::UNIX_EPOCH);
         let serialized = serde_json::to_value(&event).unwrap();
         assert_eq!(serialized["type"], "file.created");

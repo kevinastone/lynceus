@@ -1,9 +1,9 @@
 use anyhow::Context;
+use camino::Utf8PathBuf;
 use fast_glob::glob_match;
 use futures::prelude::*;
 use notify::{Config, PollWatcher, RecursiveMode};
 use notify_debouncer_full::{FileIdMap, new_debouncer_opt};
-use std::path::PathBuf;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
 /// A raw debounced directory watcher that yields relative paths of all created files.
@@ -14,10 +14,10 @@ pub struct RawDirectoryWatcher {
 impl RawDirectoryWatcher {
     /// Starts watching `watch_path` and returns a stream of relative file paths for all created files.
     pub fn new(
-        watch_path: PathBuf,
+        watch_path: Utf8PathBuf,
         interval: std::time::Duration,
         debounce: std::time::Duration,
-    ) -> anyhow::Result<(Self, impl Stream<Item = PathBuf>)> {
+    ) -> anyhow::Result<(Self, impl Stream<Item = Utf8PathBuf>)> {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
         // Set up the polling configuration
@@ -40,7 +40,7 @@ impl RawDirectoryWatcher {
         };
         watcher
             ._debouncer
-            .watch(&watch_path, RecursiveMode::Recursive)
+            .watch(watch_path.as_std_path(), RecursiveMode::Recursive)
             .with_context(|| format!("Failed to start watching path: {:?}", watch_path))?;
 
         let event_stream = UnboundedReceiverStream::new(rx);
@@ -52,7 +52,12 @@ impl RawDirectoryWatcher {
             .flat_map(|e| futures::stream::iter(e.event.paths))
             .filter(|p| future::ready(p.is_file()))
             .filter_map(move |p| {
-                future::ready(p.strip_prefix(&watch_path).ok().map(|r| r.to_path_buf()))
+                future::ready(Utf8PathBuf::from_path_buf(p).ok().and_then(|utf8_p| {
+                    utf8_p
+                        .strip_prefix(&watch_path)
+                        .ok()
+                        .map(|r| r.to_path_buf())
+                }))
             });
 
         Ok((watcher, created_files_stream))
@@ -67,17 +72,17 @@ pub struct DirectoryWatcher {
 impl DirectoryWatcher {
     /// Initializes the debounced poll watcher and applies glob filtering to the output stream.
     pub fn new(
-        watch_path: PathBuf,
+        watch_path: Utf8PathBuf,
         interval: std::time::Duration,
         debounce: std::time::Duration,
         pattern: Option<String>,
-    ) -> anyhow::Result<(Self, impl Stream<Item = PathBuf>)> {
+    ) -> anyhow::Result<(Self, impl Stream<Item = Utf8PathBuf>)> {
         let (raw, raw_stream) = RawDirectoryWatcher::new(watch_path, interval, debounce)?;
 
         let filtered_stream = raw_stream.filter(move |relative_path| {
             future::ready(match &pattern {
                 Some(pat) => {
-                    let path_str = relative_path.to_string_lossy();
+                    let path_str = relative_path.as_str();
                     glob_match(pat.as_bytes(), path_str.as_bytes())
                 }
                 None => true,
@@ -121,7 +126,7 @@ mod tests {
 
         assert!(next_event.is_ok(), "Timeout waiting for event");
         let path = next_event.unwrap().expect("Stream terminated early");
-        assert_eq!(path, PathBuf::from("hello.txt"));
+        assert_eq!(path, Utf8PathBuf::from("hello.txt"));
     }
 
     #[tokio::test]
@@ -156,7 +161,7 @@ mod tests {
 
         assert!(next_event.is_ok(), "Timeout waiting for event");
         let path = next_event.unwrap().expect("Stream terminated early");
-        assert_eq!(path, PathBuf::from("match.txt"));
+        assert_eq!(path, Utf8PathBuf::from("match.txt"));
 
         // There should be no more events for ignored.log.
         // Let's wait a short bit to confirm.
