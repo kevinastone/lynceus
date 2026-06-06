@@ -78,7 +78,7 @@ pub struct StabilizerArgs {
 #[derive(ClapArgs, Debug, Clone)]
 pub struct WebhookArgs {
     /// Optional webhook URL to post a message to when a file is created
-    #[arg(env = "LYNCEUS_WEBHOOK_URL")]
+    #[arg(short, long, env = "LYNCEUS_WEBHOOK_URL")]
     pub webhook_url: Option<String>,
 
     /// Optional JSON template for the webhook payload. Supports `{{path}}`, `{{type}}`, and `{{timestamp}}` placeholders.
