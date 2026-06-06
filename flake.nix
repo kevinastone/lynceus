@@ -46,38 +46,34 @@
           strictDeps = true;
           doCheck = false;
           SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
-        };
+        }
+        // craneLib.crateNameFromCargoToml { inherit src; };
 
         # Build only dependencies to cache them
         cargoArtifacts = craneLib.buildDepsOnly commonArgs;
 
-        # Build the final binary using cached dependency artifacts
-        lynceus = craneLib.buildPackage (
-          commonArgs
-          // {
-            inherit cargoArtifacts;
-          }
-        );
+        getTargetPkgs =
+          targetSystem:
+          if targetSystem == system then
+            pkgs
+          else
+            import nixpkgs {
+              inherit system;
+              crossSystem = targetSystem;
+            };
 
-        # Helper to compile the container image for Linux (either natively or cross-compiled)
-        makeImage =
+        # Helper to compile the binary for a target system (either natively or cross-compiled)
+        makeBinary =
           targetSystem:
           let
-            targetPkgs =
-              if targetSystem == system then
-                pkgs
-              else
-                import nixpkgs {
-                  inherit system;
-                  crossSystem = targetSystem;
-                };
+            targetPkgs = getTargetPkgs targetSystem;
 
             inherit (targetPkgs) stdenv lib;
             targetCraneLib = crane.mkLib targetPkgs;
             isCross = stdenv.hostPlatform != stdenv.buildPlatform;
             isBuildDarwin = stdenv.buildPlatform.isDarwin;
 
-            crossArgs =
+            args =
               commonArgs
               // lib.optionalAttrs (isCross && isBuildDarwin) {
                 depsBuildBuild = [
@@ -86,14 +82,25 @@
                 "NIX_LDFLAGS" = "-L${targetPkgs.buildPackages.libiconv}/lib";
               };
 
-            cargoArtifactsCross = targetCraneLib.buildDepsOnly crossArgs;
+            cargoArtifacts = targetCraneLib.buildDepsOnly args;
+          in
+          targetCraneLib.buildPackage (
+            args
+            // {
+              inherit cargoArtifacts;
+              passthru = {
+                inherit targetSystem;
+              };
+              meta.mainProgram = args.pname;
+            }
+          );
 
-            lynceusCross = targetCraneLib.buildPackage (
-              crossArgs
-              // {
-                inherit cargoArtifactsCross;
-              }
-            );
+        # Helper to compile the container image for Linux using a pre-built crossSystem package
+        makeImage =
+          bin:
+          let
+            inherit (bin) targetSystem;
+            targetPkgs = getTargetPkgs targetSystem;
           in
           with targetPkgs;
           dockerTools.buildImage {
@@ -105,7 +112,7 @@
               caCertificates
               fakeNss
             ];
-            config.Entrypoint = [ "${lynceusCross}/bin/lynceus" ];
+            config.Entrypoint = [ (lib.getExe bin) ];
             config.Labels = with cargoToml; {
               "org.opencontainers.image.title" = package.name;
               "org.opencontainers.image.source" = package.repository or "";
@@ -171,16 +178,13 @@
       in
       rec {
         packages = rec {
-          inherit lynceus;
-          bin = lynceus;
-          default = lynceus;
+          bin = makeBinary system;
+          default = bin;
 
-          check = craneLib.buildPackage (
+          build = craneLib.cargoBuild (
             commonArgs
             // {
               inherit cargoArtifacts;
-              pname = "lynceus-check";
-              cargoBuildCommand = "cargo check";
             }
           );
 
@@ -195,19 +199,23 @@
           test = craneLib.cargoTest (
             commonArgs
             // {
+              doCheck = true;
               inherit cargoArtifacts;
             }
           );
 
-          image = makeImage system;
-          image-amd64 = makeImage "x86_64-linux";
-          image-arm64 = makeImage "aarch64-linux";
+          bin-amd64 = makeBinary "x86_64-linux";
+          bin-arm64 = makeBinary "aarch64-linux";
+
+          image = makeImage bin;
+          image-amd64 = makeImage bin-amd64;
+          image-arm64 = makeImage bin-arm64;
 
           inherit push-multiarch;
         };
 
         checks = {
-          inherit (packages) check clippy test;
+          inherit (packages) build clippy test;
           formatting = treefmtStack.config.build.check self;
         };
 
