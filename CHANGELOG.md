@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.4](https://github.com/kevinastone/lynceus/compare/v0.4.3...v0.4.4) - 2026-06-06
+
+### Added
+
+- add short and long flags for webhook URL
+
+### Other
+
+- improve tracing context by using spans for file processing
+- adopt camino for UTF-8 path safety and simplify path resolution
+- split makeImage and expose cross-compiled binary packages
+- *(nix)* disable checks in commonArgs
+- *(nix)* simplify cross-compilation arguments in flake.nix
+- *(nix)* use standard system names and optimize makeImage
+- use RELEASE_PLZ_TOKEN for release-plz jobs
+
 ## [0.4.3](https://github.com/kevinastone/lynceus/compare/v0.4.2...v0.4.3) - 2026-06-05
 
 ### Other
