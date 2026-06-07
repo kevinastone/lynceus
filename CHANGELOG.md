@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0](https://github.com/kevinastone/lynceus/compare/v0.4.4...v0.5.0) - 2026-06-07
+
+### Added
+
+- log file size once a file has stabilized
+
+### Other
+
+- *(args)* [**breaking**] remove short and long command-line flags for webhook URL
+- remove .cargo from .gitignore
+- *(deps)* bump Cargo.toml dependencies to latest stable versions
+- replace custom test_helpers with camino-tempfile
+
 ## [0.4.4](https://github.com/kevinastone/lynceus/compare/v0.4.3...v0.4.4) - 2026-06-06
 
 ### Added
