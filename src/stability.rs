@@ -41,7 +41,7 @@ impl From<&StabilizerArgs> for StabilityConfig {
     }
 }
 
-fn humanize_bytes(bytes: u64) -> String {
+pub(crate) fn humanize_bytes(bytes: u64) -> String {
     const KIB: f64 = 1024.0;
     const MIB: f64 = KIB * 1024.0;
     const GIB: f64 = MIB * 1024.0;
@@ -67,12 +67,27 @@ pub struct FileStabilizer {
     config: StabilityConfig,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StableFile {
+    pub relative_path: Utf8PathBuf,
+    pub size: u64,
+}
+
+impl StableFile {
+    pub fn new(relative_path: Utf8PathBuf, size: u64) -> Self {
+        Self {
+            relative_path,
+            size,
+        }
+    }
+}
+
 impl FileStabilizer {
     pub fn new(root_path: Utf8PathBuf, config: StabilityConfig) -> Self {
         Self { root_path, config }
     }
 
-    pub async fn wait(&self, relative_path: Utf8PathBuf) -> Result<Utf8PathBuf, Utf8PathBuf> {
+    pub async fn wait(&self, relative_path: Utf8PathBuf) -> Result<StableFile, Utf8PathBuf> {
         let full_path = self.root_path.join(&relative_path);
         let mut last_size = None;
         let mut last_modified = None;
@@ -88,21 +103,18 @@ impl FileStabilizer {
 
                     if Some(current_size) == last_size && current_modified == last_modified {
                         stable_count += 1;
-                        let size_str = humanize_bytes(current_size);
                         tracing::debug!(
-                            size = %size_str,
+                            size = %humanize_bytes(current_size),
                             stable_count,
                             "File is stable"
                         );
                         if stable_count >= self.config.stable_limit.get() {
-                            return Ok(relative_path);
+                            return Ok(StableFile::new(relative_path, current_size));
                         }
                     } else {
-                        let old_size_str = last_size.map(humanize_bytes);
-                        let new_size_str = humanize_bytes(current_size);
                         tracing::debug!(
-                            old_size = ?old_size_str,
-                            new_size = %new_size_str,
+                            old_size = ?last_size.map(humanize_bytes),
+                            new_size = %humanize_bytes(current_size),
                             "File size or modification time changed, resetting stable count"
                         );
                         last_size = Some(current_size);
@@ -173,7 +185,7 @@ mod tests {
         tokio::time::advance(cooldown).await;
 
         let res = handle.await.unwrap();
-        assert_eq!(res, Ok(Utf8PathBuf::from("file.txt")));
+        assert_eq!(res, Ok(StableFile::new(Utf8PathBuf::from("file.txt"), 5)));
     }
 
     #[tokio::test(start_paused = true)]
@@ -252,7 +264,7 @@ mod tests {
         tokio::time::advance(cooldown).await;
 
         let res = handle.await.unwrap();
-        assert_eq!(res, Ok(Utf8PathBuf::from("file.txt")));
+        assert_eq!(res, Ok(StableFile::new(Utf8PathBuf::from("file.txt"), 3)));
 
         // Check the final file size
         let metadata = fs::metadata(&file_path).unwrap();

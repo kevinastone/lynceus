@@ -6,7 +6,7 @@ mod args;
 pub use args::Args;
 
 mod stability;
-use stability::{FileStabilizer, StabilityConfig};
+use stability::{FileStabilizer, StabilityConfig, humanize_bytes};
 
 mod watcher;
 use watcher::DirectoryWatcher;
@@ -69,10 +69,10 @@ async fn main() -> anyhow::Result<()> {
             async move {
                 tracing::debug!("New file detected, waiting for write to complete");
                 match stabilizer.wait(relative_path).await {
-                    Ok(rel_path) => {
-                        tracing::info!("File created");
+                    Ok(file) => {
+                        tracing::info!(size = %humanize_bytes(file.size), "File created");
                         if let Some(client) = webhook_client.as_ref() {
-                            let event = Event::file_created(rel_path);
+                            let event = Event::file_created(file.relative_path);
                             client.send_notification(event);
                         }
                     }
