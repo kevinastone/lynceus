@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.5](https://github.com/kevinastone/lynceus/compare/v0.4.4...v0.4.5) - 2026-06-07
+
+### Other
+
+- Bump Cargo.toml dependencies to latest stable versions
+- Replace custom test_helpers with camino_tempfile
+
 ## [0.4.4](https://github.com/kevinastone/lynceus/compare/v0.4.3...v0.4.4) - 2026-06-06
 
 ### Added
