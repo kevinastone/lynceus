@@ -96,28 +96,28 @@ impl DirectoryWatcher {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_helpers::TempDir;
+    use camino_tempfile::Builder;
     use std::fs;
 
     #[tokio::test]
     async fn test_raw_directory_watcher() {
-        let temp = TempDir::new("raw");
+        let temp = Builder::new().prefix("raw").tempdir().unwrap();
 
         let interval = std::time::Duration::from_millis(5);
         let debounce = std::time::Duration::from_millis(10);
 
         let (_watcher, mut stream) =
-            RawDirectoryWatcher::new(temp.path.clone(), interval, debounce).unwrap();
+            RawDirectoryWatcher::new(temp.path().to_path_buf(), interval, debounce).unwrap();
 
         // Let the watcher initialize
         tokio::time::sleep(std::time::Duration::from_millis(15)).await;
 
         // Create a file
-        let file_path = temp.path.join("hello.txt");
+        let file_path = temp.path().join("hello.txt");
         fs::write(&file_path, b"hello").unwrap();
 
         // Create a subdirectory (should be ignored by is_file check)
-        let dir_path = temp.path.join("subdir");
+        let dir_path = temp.path().join("subdir");
         fs::create_dir(&dir_path).unwrap();
 
         // Await the next event on the stream
@@ -131,13 +131,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_directory_watcher_with_pattern() {
-        let temp = TempDir::new("pattern");
+        let temp = Builder::new().prefix("pattern").tempdir().unwrap();
 
         let interval = std::time::Duration::from_millis(5);
         let debounce = std::time::Duration::from_millis(10);
 
         let (_watcher, mut stream) = DirectoryWatcher::new(
-            temp.path.clone(),
+            temp.path().to_path_buf(),
             interval,
             debounce,
             Some("*.txt".to_string()),
@@ -148,11 +148,11 @@ mod tests {
         tokio::time::sleep(std::time::Duration::from_millis(15)).await;
 
         // Create a file matching the pattern
-        let txt_path = temp.path.join("match.txt");
+        let txt_path = temp.path().join("match.txt");
         fs::write(&txt_path, b"match").unwrap();
 
         // Create a file not matching the pattern
-        let log_path = temp.path.join("ignored.log");
+        let log_path = temp.path().join("ignored.log");
         fs::write(&log_path, b"ignored").unwrap();
 
         // Await the next event on the stream (should be match.txt)

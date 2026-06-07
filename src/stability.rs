@@ -132,7 +132,7 @@ impl FileStabilizer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_helpers::TempDir;
+    use camino_tempfile::Builder;
     use std::fs;
 
     #[test]
@@ -147,8 +147,8 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn test_stabilizer_immediate_stable() {
-        let temp = TempDir::new("immediate");
-        let file_path = temp.path.join("file.txt");
+        let temp = Builder::new().prefix("immediate").tempdir().unwrap();
+        let file_path = temp.path().join("file.txt");
         fs::write(&file_path, b"hello").unwrap();
 
         let cooldown = Duration::from_secs(10);
@@ -157,7 +157,7 @@ mod tests {
             stable_limit: NonZeroUsize::new(2).unwrap(),
             error_limit: NonZeroUsize::new(3).unwrap(),
         };
-        let stabilizer = FileStabilizer::new(temp.path.clone(), config);
+        let stabilizer = FileStabilizer::new(temp.path().to_path_buf(), config);
 
         let handle =
             tokio::spawn(async move { stabilizer.wait(Utf8PathBuf::from("file.txt")).await });
@@ -178,7 +178,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn test_stabilizer_error_limit_reached() {
-        let temp = TempDir::new("error_limit");
+        let temp = Builder::new().prefix("error_limit").tempdir().unwrap();
 
         let cooldown = Duration::from_secs(10);
         let config = StabilityConfig {
@@ -186,7 +186,7 @@ mod tests {
             stable_limit: NonZeroUsize::new(2).unwrap(),
             error_limit: NonZeroUsize::new(3).unwrap(),
         };
-        let stabilizer = FileStabilizer::new(temp.path.clone(), config);
+        let stabilizer = FileStabilizer::new(temp.path().to_path_buf(), config);
 
         let handle =
             tokio::spawn(async move { stabilizer.wait(Utf8PathBuf::from("file.txt")).await });
@@ -207,8 +207,8 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn test_stabilizer_detects_changes() {
-        let temp = TempDir::new("growing");
-        let file_path = temp.path.join("file.txt");
+        let temp = Builder::new().prefix("growing").tempdir().unwrap();
+        let file_path = temp.path().join("file.txt");
         fs::write(&file_path, b"a").unwrap(); // Size 1
 
         let cooldown = Duration::from_secs(10);
@@ -217,7 +217,7 @@ mod tests {
             stable_limit: NonZeroUsize::new(3).unwrap(),
             error_limit: NonZeroUsize::new(3).unwrap(),
         };
-        let stabilizer = FileStabilizer::new(temp.path.clone(), config);
+        let stabilizer = FileStabilizer::new(temp.path().to_path_buf(), config);
 
         let handle =
             tokio::spawn(async move { stabilizer.wait(Utf8PathBuf::from("file.txt")).await });
