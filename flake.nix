@@ -106,9 +106,6 @@
           dockerTools.buildImage {
             name = cargoToml.package.name;
             copyToRoot = with dockerTools; [
-              usrBinEnv
-              binSh
-              coreutils
               caCertificates
               fakeNss
             ];
@@ -204,12 +201,16 @@
             }
           );
 
-          bin-amd64 = makeBinary "x86_64-linux";
-          bin-arm64 = makeBinary "aarch64-linux";
+          bin-amd64 = makeBinary "x86_64-unknown-linux-musl";
+          bin-arm64 = makeBinary "aarch64-unknown-linux-musl";
+          bin-amd64-glibc = makeBinary "x86_64-linux";
+          bin-arm64-glibc = makeBinary "aarch64-linux";
 
           image = makeImage bin;
           image-amd64 = makeImage bin-amd64;
           image-arm64 = makeImage bin-arm64;
+          image-amd64-glibc = makeImage bin-amd64-glibc;
+          image-arm64-glibc = makeImage bin-arm64-glibc;
 
           inherit push-multiarch;
         };
