@@ -8,7 +8,7 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 
 /// A raw debounced directory watcher that yields relative paths of all created files.
 pub struct RawDirectoryWatcher {
-    _debouncer: notify_debouncer_full::Debouncer<PollWatcher, FileIdMap>,
+    debouncer: notify_debouncer_full::Debouncer<PollWatcher, FileIdMap>,
 }
 
 impl RawDirectoryWatcher {
@@ -35,11 +35,9 @@ impl RawDirectoryWatcher {
         )
         .context("Failed to create polling debouncer")?;
 
-        let mut watcher = Self {
-            _debouncer: debouncer,
-        };
+        let mut watcher = Self { debouncer };
         watcher
-            ._debouncer
+            .debouncer
             .watch(watch_path.as_std_path(), RecursiveMode::Recursive)
             .with_context(|| format!("Failed to start watching path: {:?}", watch_path))?;
 
@@ -83,7 +81,7 @@ impl DirectoryWatcher {
             future::ready(match &pattern {
                 Some(pat) => {
                     let path_str = relative_path.as_str();
-                    glob_match(pat.as_bytes(), path_str.as_bytes())
+                    glob_match(pat, path_str)
                 }
                 None => true,
             })

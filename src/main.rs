@@ -67,7 +67,7 @@ async fn main() -> anyhow::Result<()> {
             let webhook_client = webhook_client.clone();
             let span = tracing::info_span!("file.process", path = %relative_path);
             async move {
-                tracing::debug!("New file detected, waiting for write to complete");
+                tracing::info!("New file detected, checking for stability");
                 match stabilizer.wait(relative_path).await {
                     Ok(file) => {
                         tracing::info!(size = %humanize_bytes(file.size), "File created");

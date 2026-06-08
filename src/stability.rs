@@ -11,14 +11,8 @@ pub struct StabilityConfig {
 }
 
 impl StabilityConfig {
-    pub const DEFAULT_STABLE_LIMIT: NonZeroUsize = match NonZeroUsize::new(3) {
-        Some(val) => val,
-        None => panic!("DEFAULT_STABLE_LIMIT must be non-zero"),
-    };
-    pub const DEFAULT_ERROR_LIMIT: NonZeroUsize = match NonZeroUsize::new(5) {
-        Some(val) => val,
-        None => panic!("DEFAULT_ERROR_LIMIT must be non-zero"),
-    };
+    pub const DEFAULT_STABLE_LIMIT: NonZeroUsize = NonZeroUsize::new(3).unwrap();
+    pub const DEFAULT_ERROR_LIMIT: NonZeroUsize = NonZeroUsize::new(5).unwrap();
 }
 
 impl Default for StabilityConfig {
