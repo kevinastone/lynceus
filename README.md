@@ -50,20 +50,6 @@ graph TD
         P -->|No & Max Retries Exceeded| R["Log Error & Drop"]
         P -->|Yes| S["Success (Log Status)"]
     end
-
-    %% Styling Elements for Visual Appeal
-    classDef watcherStyle fill:#f0f8ff,stroke:#0066cc,stroke-width:1px,color:#003366;
-    classDef stabilizerStyle fill:#fffcf0,stroke:#cc9900,stroke-width:1px,color:#664400;
-    classDef webhookStyle fill:#f0fff0,stroke:#00cc66,stroke-width:1px,color:#004400;
-    classDef processNode fill:#ffffff,stroke:#333333,stroke-width:1px;
-
-    class A,B,C,D,E processNode;
-    class F,G,H,I,K,L processNode;
-    class M,N,O,P,Q,R,S processNode;
-
-    class Watcher watcherStyle;
-    class Stabilizer stabilizerStyle;
-    class Webhook webhookStyle;
 ```
 
 ### 1. Directory Watcher & Filter
