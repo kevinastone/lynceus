@@ -218,6 +218,8 @@
               cargo-outdated
               cargo-release
               git-cliff
+              regctl
+              skopeo
             ];
 
             RUST_SRC_PATH = "${rustPlatform.rustLibSrc}";
