@@ -76,16 +76,10 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 📦 Build Multi-Arch Docker Images with Nix (Cross-Compiled!)
-        run: |
-          nix build .#image-amd64 --out-link result-amd64 -L
-          nix build .#image-arm64 --out-link result-arm64 -L
-
-      - name: ⬆️ Push Multi-Arch Image to GHCR
+      - name: 📦 Build & Push Multi-Arch OCI Image with Nix (Cross-Compiled!)
         env:
           TAGS: ${{ steps.meta.outputs.tags }}
-        run: |
-          nix run .#push-multiarch -- "ghcr.io/${{ github.repository }}" result-amd64 result-arm64
+        run: nix run .#image-multiarch.push -L -- $TAGS
 
   release-plz-release:
     name: Release-plz release

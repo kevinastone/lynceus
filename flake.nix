@@ -124,60 +124,42 @@
           arm64-glibc = "aarch64-linux";
         };
 
-        push-multiarch = pkgs.writeShellApplication {
-          name = "push-multiarch";
-          runtimeInputs = with pkgs; [
-            regctl
-            gzip
-            coreutils
-          ];
-          text = ''
-            if [ "$#" -lt 3 ]; then
-              echo "Usage: push-multiarch <registry-repo> <amd64-image-tar> <arm64-image-tar>"
-              exit 1
-            fi
-
-            REPO=$(echo "$1" | tr '[:upper:]' '[:lower:]')
-            AMD64_IMAGE="$2"
-            ARM64_IMAGE="$3"
-
-            if [ -z "''${TAGS:-}" ]; then
-              echo "Error: TAGS environment variable is not set"
-              exit 1
-            fi
-
-            TMP_DIR=$(mktemp -d)
-            trap 'rm -rf "$TMP_DIR"' EXIT
-
-            # Import images into local OCI layout directories directly from Nix build outputs
-            regctl image import "ocidir://$TMP_DIR/amd64" "$AMD64_IMAGE"
-            regctl image import "ocidir://$TMP_DIR/arm64" "$ARM64_IMAGE"
-
-            # Get the digests of the imported OCI layouts
-            AMD64_DIGEST=$(regctl image digest "ocidir://$TMP_DIR/amd64")
-            ARM64_DIGEST=$(regctl image digest "ocidir://$TMP_DIR/arm64")
-
-            # Push single-architecture layers and manifests by digest
-            echo "Pushing AMD64 digest: $AMD64_DIGEST to $REPO..."
-            regctl image copy "ocidir://$TMP_DIR/amd64" "$REPO@$AMD64_DIGEST"
-
-            echo "Pushing ARM64 digest: $ARM64_DIGEST to $REPO..."
-            regctl image copy "ocidir://$TMP_DIR/arm64" "$REPO@$ARM64_DIGEST"
-
-            # Create and push the multi-architecture manifest index for each tag
-            # Since TAGS is multiline, we read it line by line
-            echo "$TAGS" | while read -r tag || [ -n "$tag" ]; do
-              if [ -n "$tag" ]; then
-                echo "Creating and pushing multi-arch index for $tag..."
-                regctl index create "$tag" \
-                  --ref "$REPO@$AMD64_DIGEST" \
-                  --platform linux/amd64 \
-                  --ref "$REPO@$ARM64_DIGEST" \
-                  --platform linux/arm64
-              fi
-            done
-          '';
-        };
+        makeMultiArchImage =
+          images:
+          with pkgs;
+          with lib;
+          let
+            ociDir =
+              runCommand "${cargoToml.package.name}-multiarch-oci"
+                {
+                  nativeBuildInputs = [ regctl ];
+                  passthru.push = writeShellApplication {
+                    name = "push-multiarch-oci";
+                    runtimeInputs = [ regctl ];
+                    text = ''
+                      for dest in "$@"; do
+                        echo "Pushing multi-arch image to $dest..."
+                        regctl image copy "ocidir://${ociDir}" "$dest"
+                      done
+                    '';
+                  };
+                }
+                (
+                  concatLines (
+                    mapAttrsToList (arch: img: "regctl image import ocidir://image:${arch} ${img}") images
+                    ++ [
+                      "regctl index create ocidir://image ${
+                        concatMapStringsSep " " (arch: "--ref ocidir://image:${arch} --platform linux/${arch}") (
+                          attrNames images
+                        )
+                      }"
+                    ]
+                    ++ mapAttrsToList (arch: _: "regctl tag delete ocidir://image:${arch}") images
+                    ++ [ ''mv image "$out"'' ]
+                  )
+                );
+          in
+          ociDir;
 
         crossBins = pkgs.lib.mapAttrs' (
           name: target: pkgs.lib.nameValuePair "bin-${name}" (makeBinary target)
@@ -209,8 +191,14 @@
           );
 
           image = makeImage bin;
-
-          inherit push-multiarch;
+          image-multiarch = makeMultiArchImage {
+            amd64 = crossImages.image-amd64;
+            arm64 = crossImages.image-arm64;
+          };
+          image-multiarch-glibc = makeMultiArchImage {
+            amd64 = crossImages.image-amd64-glibc;
+            arm64 = crossImages.image-arm64-glibc;
+          };
         }
         // crossBins
         // crossImages;

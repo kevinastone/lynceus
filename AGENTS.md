@@ -22,10 +22,11 @@ To verify code correctness:
 
 ### 3. Container Images (Nix)
 This project builds highly-reproducible, minimal Docker/OCI images using Nix:
-- Build the OCI container tarball: `nix build .#image`
-- Push the build artifact via Skopeo (integrated into Nix):
+- Build the single-arch OCI container tarball: `nix build .#image`
+- Build the multi-arch (`linux/amd64` + `linux/arm64`) OCI layout directory: `nix build .#image-multiarch`
+- Build and push the multi-arch image directly to one or more registry destinations:
   ```bash
-  nix run .#skopeo -- --insecure-policy copy --all docker-archive:./result docker://<destination>
+  nix run .#image-multiarch.push -- <dest1> [dest2...]
   ```
 
 ### 4. Git Commits
